@@ -1,5 +1,7 @@
-﻿import { useTheme } from '@/lib/ThemeContext';
+﻿import { HabitGridMobile } from '@/components/HabitGridMobile';
+import { useTheme } from '@/lib/ThemeContext';
 import {
+    getMonthDays,
     getMonthRange,
     getToday,
     useArchiveHabit,
@@ -65,6 +67,7 @@ export default function HabitsScreen() {
   const today = getToday();
   const now = new Date();
   const { start, end } = getMonthRange(now.getFullYear(), now.getMonth());
+  const monthDays = getMonthDays(now.getFullYear(), now.getMonth());
 
   // Fetch data
   const { data: activeHabits, isLoading: habitsLoading, refetch: refetchHabits } = useHabits(true);
@@ -386,9 +389,22 @@ export default function HabitsScreen() {
           </Text>
         </View>
 
+        {/* Habits Grid (web-like) */}
+        {!showArchived && habits && habits.length > 0 && entries && (
+          <HabitGridMobile
+            habits={habits}
+            entries={entries}
+            days={monthDays}
+            onToggle={(habitId, date, completed) => {
+              toggleEntry.mutate({ habitId, entryDate: date, completed });
+            }}
+            colors={colors}
+          />
+        )}
+
         {/* Habits List */}
         <View>
-          {habits && habits.length > 0 ? (
+          {showArchived && habits && habits.length > 0 ? (
             habits.map((habit: Habit) => {
               const todayEntry = getTodayEntry(habit.id);
               const isCompleted = todayEntry?.completed || false;
