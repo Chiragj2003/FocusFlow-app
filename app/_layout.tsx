@@ -15,7 +15,27 @@ import '../global.css';
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Cache data for 5 minutes by default
+      staleTime: 5 * 60 * 1000,
+      // Keep unused data cached for 30 minutes
+      gcTime: 30 * 60 * 1000,
+      // Retry failed requests up to 2 times
+      retry: 2,
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
+      // Refetch on window focus for fresh data
+      refetchOnWindowFocus: false,
+      // Don't refetch on reconnect automatically
+      refetchOnReconnect: 'always',
+    },
+    mutations: {
+      // Retry mutations once
+      retry: 1,
+    },
+  },
+});
 
 // Get Clerk publishable key from environment
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;

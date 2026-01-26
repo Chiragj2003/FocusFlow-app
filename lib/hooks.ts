@@ -2,12 +2,12 @@ import { useAuth } from '@clerk/clerk-expo';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { badgesApi, challengesApi, entriesApi, focusSessionsApi, habitsApi, insightsApi } from './api';
 import {
-    localBadgesApi,
-    localChallengesApi,
-    localEntriesApi,
-    localFocusSessionsApi,
-    localHabitsApi,
-    localInsightsApi,
+  localBadgesApi,
+  localChallengesApi,
+  localEntriesApi,
+  localFocusSessionsApi,
+  localHabitsApi,
+  localInsightsApi,
 } from './localStorage';
 
 // Query keys
@@ -38,7 +38,8 @@ export function useHabits(active?: boolean) {
   return useQuery({
     queryKey: active === undefined ? queryKeys.habits : active ? queryKeys.habitsActive : queryKeys.habitsArchived,
     queryFn: () => isLocal ? localHabitsApi.getAll(active) : habitsApi.getAll(active),
-    staleTime: 30000,
+    staleTime: 2 * 60 * 1000, // 2 minutes - habits don't change often
+    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
   });
 }
 
@@ -134,7 +135,8 @@ export function useEntries(startDate: string, endDate: string) {
     queryFn: () => isLocal
       ? localEntriesApi.getByDateRange(startDate, endDate)
       : entriesApi.getByDateRange(startDate, endDate),
-    staleTime: 10000,
+    staleTime: 60 * 1000, // 1 minute - entries change when user toggles
+    gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
   });
 }
 
@@ -156,9 +158,54 @@ export function useToggleEntry() {
       value?: number;
       notes?: string;
     }) => isLocal
-      ? localEntriesApi.toggle(habitId, entryDate, completed, value, notes)
-      : entriesApi.toggle(habitId, entryDate, completed, value, notes),
-    onSuccess: () => {
+        ? localEntriesApi.toggle(habitId, entryDate, completed, value, notes)
+        : entriesApi.toggle(habitId, entryDate, completed, value, notes),
+    // Optimistic update for instant feedback
+    onMutate: async (newEntry) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['entries'] });
+
+      // Snapshot all entry queries for rollback
+      const previousEntries = queryClient.getQueriesData({ queryKey: ['entries'] });
+
+      // Optimistically update all entry queries
+      queryClient.setQueriesData({ queryKey: ['entries'] }, (old: any) => {
+        if (!old || !Array.isArray(old)) return old;
+
+        const existingIndex = old.findIndex(
+          (e: any) => e.habitId === newEntry.habitId && e.entryDate === newEntry.entryDate
+        );
+
+        if (existingIndex >= 0) {
+          // Update existing entry
+          const updated = [...old];
+          updated[existingIndex] = { ...updated[existingIndex], completed: newEntry.completed };
+          return updated;
+        } else {
+          // Add new entry
+          return [...old, {
+            id: `temp-${Date.now()}`,
+            habitId: newEntry.habitId,
+            entryDate: newEntry.entryDate,
+            completed: newEntry.completed,
+            value: newEntry.value,
+            notes: newEntry.notes,
+          }];
+        }
+      });
+
+      return { previousEntries };
+    },
+    onError: (_err, _newEntry, context) => {
+      // Rollback on error
+      if (context?.previousEntries) {
+        context.previousEntries.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data);
+        });
+      }
+    },
+    onSettled: () => {
+      // Always refetch after mutation settles
       queryClient.invalidateQueries({ queryKey: ['entries'] });
       queryClient.invalidateQueries({ queryKey: queryKeys.insights });
       queryClient.invalidateQueries({ queryKey: queryKeys.streaks });
@@ -224,7 +271,7 @@ export function useCreateFocusSession() {
   const isLocal = useIsLocalMode();
 
   return useMutation({
-    mutationFn: (data: { habitId?: string; duration: number; notes?: string }) => 
+    mutationFn: (data: { habitId?: string; duration: number; notes?: string }) =>
       isLocal ? localFocusSessionsApi.create(data) : focusSessionsApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.focusSessions });
@@ -260,7 +307,7 @@ export function useJoinChallenge() {
   const isLocal = useIsLocalMode();
 
   return useMutation({
-    mutationFn: (challengeId: string) => 
+    mutationFn: (challengeId: string) =>
       isLocal ? localChallengesApi.join(challengeId) : challengesApi.join(challengeId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.challenges });
@@ -286,7 +333,7 @@ export function getCurrentMonthRange() {
   const month = now.getMonth();
   const start = new Date(year, month, 1);
   const end = new Date(year, month + 1, 0);
-  
+
   return {
     start: start.toISOString().split('T')[0],
     end: end.toISOString().split('T')[0],
@@ -297,7 +344,7 @@ export function getCurrentMonthRange() {
 export function getMonthRange(year: number, month: number) {
   const start = new Date(year, month, 1);
   const end = new Date(year, month + 1, 0);
-  
+
   return {
     start: start.toISOString().split('T')[0],
     end: end.toISOString().split('T')[0],
@@ -313,4 +360,17 @@ export function formatDate(date: Date | string): string {
 // Helper to get today's date
 export function getToday(): string {
   return new Date().toISOString().split('T')[0];
+}
+
+// Helper to get all days in a month as date strings
+export function getMonthDays(year: number, month: number): string[] {
+  const days: string[] = [];
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = new Date(year, month, day);
+    days.push(date.toISOString().split('T')[0]);
+  }
+
+  return days;
 }
