@@ -34,7 +34,7 @@ interface CategoryData {
 export default function InsightsScreen() {
   const { isDark, colors } = useTheme();
   const [refreshing, setRefreshing] = React.useState(false);
-  
+
   const { data: insights, isLoading: insightsLoading, refetch: refetchInsights } = useInsights();
   const { data: streaks, isLoading: streaksLoading, refetch: refetchStreaks } = useStreaks();
   const { data: habits, refetch: refetchHabits } = useHabits(true);
@@ -76,9 +76,9 @@ export default function InsightsScreen() {
   // Get category performance (group by category)
   const categoryPerformance: CategoryData[] = useMemo(() => {
     if (!insights?.topHabits || !habits) return [];
-    
+
     const categoryMap = new Map<string, { total: number; completed: number; color: string }>();
-    
+
     insights.topHabits.forEach((habit: TopHabit) => {
       const fullHabit = habits.find((h: Habit) => h.id === habit.habitId);
       const category = fullHabit?.category || 'Other';
@@ -87,7 +87,7 @@ export default function InsightsScreen() {
       existing.completed += habit.completedCount;
       categoryMap.set(category, existing);
     });
-    
+
     return Array.from(categoryMap.entries())
       .map(([name, data]) => ({
         name,
@@ -101,12 +101,12 @@ export default function InsightsScreen() {
   // Generate line chart path for weekly trend
   const lineChartPath = useMemo(() => {
     if (weeklyData.length === 0) return '';
-    
+
     const padding = 20;
     const graphWidth = chartWidth - padding * 2;
     const graphHeight = chartHeight - 60;
     const stepX = graphWidth / (weeklyData.length - 1 || 1);
-    
+
     let path = '';
     weeklyData.forEach((point: WeeklyChartData, index: number) => {
       const x = padding + index * stepX;
@@ -121,20 +121,20 @@ export default function InsightsScreen() {
         path += ` C ${cpX} ${prevY}, ${cpX} ${y}, ${x} ${y}`;
       }
     });
-    
+
     return path;
   }, [weeklyData, maxBarValue]);
 
   // Generate area fill path
   const areaPath = useMemo(() => {
     if (weeklyData.length === 0) return '';
-    
+
     const padding = 20;
     const graphWidth = chartWidth - padding * 2;
     const graphHeight = chartHeight - 60;
     const stepX = graphWidth / (weeklyData.length - 1 || 1);
     const baseY = graphHeight + 20;
-    
+
     let path = `M ${padding} ${baseY}`;
     weeklyData.forEach((point: WeeklyChartData, index: number) => {
       const x = padding + index * stepX;
@@ -150,7 +150,7 @@ export default function InsightsScreen() {
       }
     });
     path += ` L ${padding + (weeklyData.length - 1) * stepX} ${baseY} Z`;
-    
+
     return path;
   }, [weeklyData, maxBarValue]);
 
@@ -166,66 +166,55 @@ export default function InsightsScreen() {
   return (
     <SafeAreaView style={{ backgroundColor: colors.background }} className="flex-1">
       <StatusBar style={isDark ? 'light' : 'dark'} />
-      <ScrollView 
+      <ScrollView
         className="flex-1 px-4"
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Header with Gradient */}
-        <LinearGradient
-          colors={isDark ? ['#1e293b', '#334155'] : ['#f8fafc', '#e2e8f0']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          className="pt-4 pb-4 px-4 -mx-4 rounded-2xl mt-2"
-        >
+        {/* Header - Web Aligned */}
+        <View className="mb-6 mt-2">
           <Text style={{ color: colors.text }} className="text-3xl font-bold">Insights</Text>
-          <Text style={{ color: colors.textMuted }} className="mt-1 text-base">
-            Your habit analytics and trends
+          <Text style={{ color: colors.textMuted }} className="mt-1 text-base text-zinc-400">
+            Analytics and trends
           </Text>
-        </LinearGradient>
+        </View>
 
-        {/* Stats Overview with Gradients */}
-        <View className="mt-4 flex-row justify-between">
-          <LinearGradient
-            colors={['#22c55e', '#16a34a']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            className="flex-1 rounded-2xl p-4 mr-2"
+        {/* Stats Overview - New Web Style */}
+        <View className="flex-row justify-between gap-3">
+          <View
+            style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+            className="flex-1 rounded-xl border p-4 items-center"
           >
-            <View className="flex-row items-center mb-1">
-              <Ionicons name="checkmark-circle" size={18} color="#fff" />
-              <Text className="text-white text-xs ml-1 opacity-90">Success Rate</Text>
+            <View className="w-8 h-8 rounded-full bg-emerald-500/10 items-center justify-center mb-2">
+              <Ionicons name="checkmark-circle" size={18} color="#10b981" />
             </View>
-            <Text className="text-white text-2xl font-bold">{monthlyCompletion}%</Text>
-          </LinearGradient>
-          
-          <LinearGradient
-            colors={['#3b82f6', '#2563eb']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            className="flex-1 rounded-2xl p-4 mx-1"
+            <Text style={{ color: colors.text }} className="text-2xl font-bold">{monthlyCompletion}%</Text>
+            <Text style={{ color: colors.textMuted }} className="text-xs mt-1">Success</Text>
+          </View>
+
+          <View
+            style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+            className="flex-1 rounded-xl border p-4 items-center"
           >
-            <View className="flex-row items-center mb-1">
-              <Ionicons name="ribbon" size={18} color="#fff" />
-              <Text className="text-white text-xs ml-1 opacity-90">Completions</Text>
+            <View className="w-8 h-8 rounded-full bg-blue-500/10 items-center justify-center mb-2">
+              <Ionicons name="ribbon" size={18} color="#3b82f6" />
             </View>
-            <Text className="text-white text-2xl font-bold">{totalCompletions}</Text>
-          </LinearGradient>
-          
-          <LinearGradient
-            colors={['#f59e0b', '#d97706']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            className="flex-1 rounded-2xl p-4 ml-2"
+            <Text style={{ color: colors.text }} className="text-2xl font-bold">{totalCompletions}</Text>
+            <Text style={{ color: colors.textMuted }} className="text-xs mt-1">Total</Text>
+          </View>
+
+          <View
+            style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+            className="flex-1 rounded-xl border p-4 items-center"
           >
-            <View className="flex-row items-center mb-1">
-              <Ionicons name="star" size={18} color="#fff" />
-              <Text className="text-white text-xs ml-1 opacity-90">Perfect Days</Text>
+            <View className="w-8 h-8 rounded-full bg-amber-500/10 items-center justify-center mb-2">
+              <Ionicons name="star" size={18} color="#f59e0b" />
             </View>
-            <Text className="text-white text-2xl font-bold">{perfectDays}</Text>
-          </LinearGradient>
+            <Text style={{ color: colors.text }} className="text-2xl font-bold">{perfectDays}</Text>
+            <Text style={{ color: colors.textMuted }} className="text-xs mt-1">Perfect</Text>
+          </View>
         </View>
 
         {/* Weekly Trend Line Chart */}
@@ -264,13 +253,13 @@ export default function InsightsScreen() {
                   </G>
                 );
               })}
-              
+
               {/* Area fill */}
               <Path
                 d={areaPath}
                 fill={colors.primary + '20'}
               />
-              
+
               {/* Line */}
               <Path
                 d={lineChartPath}
@@ -280,7 +269,7 @@ export default function InsightsScreen() {
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
-              
+
               {/* Data points */}
               {weeklyData.map((point: WeeklyChartData, index: number) => {
                 const padding = 20;
@@ -328,7 +317,7 @@ export default function InsightsScreen() {
               <View key={index} className="mb-4">
                 <View className="flex-row items-center justify-between mb-2">
                   <View className="flex-row items-center flex-1">
-                    <View 
+                    <View
                       className="w-4 h-4 rounded-full mr-2"
                       style={{ backgroundColor: category.color }}
                     />
@@ -341,11 +330,11 @@ export default function InsightsScreen() {
                   </Text>
                 </View>
                 <View style={{ backgroundColor: colors.backgroundTertiary }} className="h-3 rounded-full overflow-hidden">
-                  <View 
+                  <View
                     className="h-full rounded-full"
-                    style={{ 
+                    style={{
                       width: `${category.percentage}%`,
-                      backgroundColor: category.color 
+                      backgroundColor: category.color
                     }}
                   />
                 </View>
@@ -364,12 +353,12 @@ export default function InsightsScreen() {
             {topHabits.map((habit: TopHabitDisplay, index: number) => {
               const maxStreak = Math.max(...topHabits.map((h: TopHabitDisplay) => h.longestStreak), 1);
               const currentWidth = (habit.streak / maxStreak) * 100;
-              
+
               return (
                 <View key={index} className="mb-4">
                   <View className="flex-row items-center justify-between mb-1">
                     <View className="flex-row items-center flex-1">
-                      <View 
+                      <View
                         className="w-8 h-8 rounded-lg items-center justify-center mr-2"
                         style={{ backgroundColor: habit.color + '20' }}
                       >
@@ -386,11 +375,11 @@ export default function InsightsScreen() {
                     </Text>
                   </View>
                   <View style={{ backgroundColor: colors.backgroundTertiary }} className="h-2 rounded-full overflow-hidden">
-                    <View 
+                    <View
                       className="h-full rounded-full"
-                      style={{ 
+                      style={{
                         width: `${currentWidth}%`,
-                        backgroundColor: habit.color 
+                        backgroundColor: habit.color
                       }}
                     />
                   </View>
@@ -495,29 +484,29 @@ export default function InsightsScreen() {
           <Text style={{ color: colors.text }} className="text-base font-bold mb-3">This Week</Text>
           <View className="flex-row flex-wrap">
             {weeklyData.map((day: WeeklyChartData, index: number) => (
-              <View 
-                key={index} 
+              <View
+                key={index}
                 className="w-[14.28%] items-center py-2"
               >
-                <View 
+                <View
                   className="w-10 h-10 rounded-full items-center justify-center mb-1"
-                  style={{ 
-                    backgroundColor: day.value >= 80 
+                  style={{
+                    backgroundColor: day.value >= 80
                       ? colors.success + '20'
-                      : day.value >= 50 
-                        ? colors.warning + '20' 
-                        : day.value > 0 
+                      : day.value >= 50
+                        ? colors.warning + '20'
+                        : day.value > 0
                           ? colors.error + '20'
                           : colors.backgroundTertiary
                   }}
                 >
-                  <Text 
-                    style={{ 
-                      color: day.value >= 80 
+                  <Text
+                    style={{
+                      color: day.value >= 80
                         ? colors.success
-                        : day.value >= 50 
-                          ? colors.warning 
-                          : day.value > 0 
+                        : day.value >= 50
+                          ? colors.warning
+                          : day.value > 0
                             ? colors.error
                             : colors.textMuted,
                       fontSize: 11,
