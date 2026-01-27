@@ -325,91 +325,107 @@ export default function HabitsScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Header with Gradient */}
-        <LinearGradient
-          colors={isDark ? ['#1e293b', '#334155'] : ['#f8fafc', '#e2e8f0']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          className="pt-4 pb-4 px-4 -mx-4 rounded-2xl mt-2 flex-row items-center justify-between"
-        >
+        {/* Header - Web Aligned */}
+        <View className="flex-row items-center justify-between mb-4 mt-2">
           <View>
             <Text style={{ color: colors.text }} className="text-3xl font-bold">Habits</Text>
-            <Text style={{ color: colors.textMuted }} className="mt-1 text-sm">
-              {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+            <Text style={{ color: colors.textMuted }} className="text-base text-zinc-400">
+              Track your daily habits and build consistency
             </Text>
           </View>
-          <Pressable
-            onPress={() => setIsModalOpen(true)}
-          >
-            <LinearGradient
-              colors={['#3b82f6', '#2563eb']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              className="px-5 py-3 rounded-full flex-row items-center"
-            >
-              <Ionicons name="add" size={20} color="#fff" />
-              <Text className="text-white font-bold ml-1">Add Habit</Text>
-            </LinearGradient>
-          </Pressable>
-        </LinearGradient>
+        </View>
 
-        {/* Toggle Active/Archived */}
-        <View className="mt-4 flex-row">
+        {/* Toolbar - Web Aligned */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          className="mb-6 flex-row"
+          contentContainerStyle={{ gap: 8, paddingRight: 16 }}
+        >
+          {/* AI Create Button */}
           <Pressable
-            style={{ backgroundColor: !showArchived ? colors.primary : colors.backgroundTertiary }}
-            className="flex-1 py-2.5 rounded-xl mr-2"
-            onPress={() => setShowArchived(false)}
+            onPress={() => setShowAIGenerator(true)}
+            className="flex-row items-center space-x-2 px-3 py-2 rounded-lg bg-violet-500/10 active:bg-violet-500/20"
           >
-            <Text style={{ color: !showArchived ? '#fff' : colors.textMuted }} className="text-center font-medium">
-              Active ({activeHabits?.length || 0})
-            </Text>
+            <Ionicons name="sparkles" size={16} color="#a78bfa" />
+            <Text className="text-violet-400 font-medium text-sm">Add with AI</Text>
           </Pressable>
+
+          {/* Templates Button */}
           <Pressable
-            style={{ backgroundColor: showArchived ? colors.primary : colors.backgroundTertiary }}
-            className="flex-1 py-2.5 rounded-xl"
-            onPress={() => setShowArchived(true)}
+            onPress={() => setShowTemplates(true)}
+            className="flex-row items-center space-x-2 px-3 py-2 rounded-lg bg-amber-400/10 active:bg-amber-400/20"
           >
-            <Text style={{ color: showArchived ? '#fff' : colors.textMuted }} className="text-center font-medium">
+            <Ionicons name="grid" size={16} color="#fbbf24" />
+            <Text className="text-amber-400 font-medium text-sm">Templates</Text>
+          </Pressable>
+
+          {/* Challenges Button */}
+          <Pressable
+            className="flex-row items-center space-x-2 px-3 py-2 rounded-lg bg-emerald-400/10 active:bg-emerald-400/20"
+            // TODO: Implement challenges modal
+            onPress={() => Alert.alert('Coming Soon', 'Challenges feature will be available soon!')}
+          >
+            <Ionicons name="trophy" size={16} color="#34d399" />
+            <Text className="text-emerald-400 font-medium text-sm">Challenges</Text>
+          </Pressable>
+
+          {/* Timer Button */}
+          <Pressable
+            className="flex-row items-center space-x-2 px-3 py-2 rounded-lg bg-rose-400/10 active:bg-rose-400/20"
+            // TODO: Implement timer modal
+            onPress={() => Alert.alert('Coming Soon', 'Focus timer feature will be available soon!')}
+          >
+            <Ionicons name="timer" size={16} color="#fb7185" />
+            <Text className="text-rose-400 font-medium text-sm">Timer</Text>
+          </Pressable>
+
+          {/* Filter Button */}
+          <Pressable
+            className="flex-row items-center space-x-2 px-3 py-2 rounded-lg bg-zinc-800 active:bg-zinc-700"
+          >
+            <Ionicons name="filter" size={16} color="#a1a1aa" />
+            <Text className="text-zinc-400 font-medium text-sm">Filter</Text>
+          </Pressable>
+
+          {/* Sort Button */}
+          <Pressable
+            className="flex-row items-center space-x-2 px-3 py-2 rounded-lg bg-zinc-800 active:bg-zinc-700"
+          >
+            <Ionicons name="swap-vertical" size={16} color="#a1a1aa" />
+            <Text className="text-zinc-400 font-medium text-sm">Newest</Text>
+          </Pressable>
+
+          {/* Archive Toggle */}
+          <Pressable
+            onPress={() => setShowArchived(!showArchived)}
+            className={`flex-row items-center space-x-2 px-3 py-2 rounded-lg border ${showArchived ? 'bg-zinc-700 border-zinc-600' : 'bg-zinc-800 border-transparent'
+              }`}
+          >
+            <Ionicons name="archive-outline" size={16} color={showArchived ? "#fff" : "#a1a1aa"} />
+            <Text className={`${showArchived ? 'text-white' : 'text-zinc-400'} font-medium text-sm`}>
               Archived ({archivedHabits?.length || 0})
             </Text>
           </Pressable>
+        </ScrollView>
+
+        {/* Stats Summary - New Web Style */}
+        <View className="mb-6 flex-row justify-between bg-zinc-900/50 p-4 rounded-xl border border-zinc-800/50">
+          <View>
+            <Text style={{ color: colors.textMuted }} className="text-xs uppercase tracking-wider mb-1">Total Habits</Text>
+            <Text style={{ color: colors.text }} className="text-2xl font-bold">{habits?.length || 0}</Text>
+          </View>
+          <View>
+            <Text style={{ color: colors.textMuted }} className="text-xs uppercase tracking-wider mb-1">Completed Today</Text>
+            <Text style={{ color: colors.success }} className="text-2xl font-bold">{completedCount}</Text>
+          </View>
+          <View>
+            <Text style={{ color: colors.textMuted }} className="text-xs uppercase tracking-wider mb-1">Completion Rate</Text>
+            <Text style={{ color: colors.primary }} className="text-2xl font-bold">
+              {habits?.length ? Math.round((completedCount / habits.length) * 100) : 0}%
+            </Text>
+          </View>
         </View>
-
-        {/* Today's Progress - Enhanced Design */}
-        {!showArchived && (
-          <LinearGradient
-            colors={isDark ? ['#1e3a8a', '#1e40af'] : ['#dbeafe', '#bfdbfe']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            className="mt-4 rounded-2xl p-5"
-          >
-            <View className="flex-row items-center justify-between mb-4">
-              <View>
-                <Text style={{ color: isDark ? '#fff' : '#1e40af' }} className="text-xl font-bold">Today's Progress</Text>
-                <Text style={{ color: isDark ? '#93c5fd' : '#3b82f6' }} className="text-sm mt-1">Keep the momentum going!</Text>
-              </View>
-              <View className="items-center">
-                <Text style={{ color: isDark ? '#fff' : '#1e40af' }} className="text-3xl font-bold">{progressPercent}%</Text>
-              </View>
-            </View>
-
-            <View className="flex-row items-center justify-between mb-3">
-              <View className="flex-row items-center">
-                <Ionicons name="checkmark-circle" size={20} color={isDark ? '#93c5fd' : '#3b82f6'} />
-                <Text style={{ color: isDark ? '#93c5fd' : '#3b82f6' }} className="ml-2 text-sm font-medium">
-                  {completedCount} of {activeHabits?.length || 0} completed
-                </Text>
-              </View>
-            </View>
-
-            <View style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(59,130,246,0.2)' }} className="h-3 rounded-full overflow-hidden">
-              <View
-                style={{ width: `${progressPercent}%`, backgroundColor: isDark ? '#60a5fa' : '#2563eb' }}
-                className="h-full rounded-full"
-              />
-            </View>
-          </LinearGradient>
-        )}
 
         {/* Habits List Header */}
         <View className="mt-6 flex-row items-center justify-between mb-2">
@@ -456,6 +472,18 @@ export default function HabitsScreen() {
               );
             }}
             colors={colors}
+            onArchive={(habitId) => {
+              Alert.alert('Archive Habit', 'Are you sure you want to archive this habit?', [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Archive', onPress: () => archiveHabit.mutate(habitId) }
+              ]);
+            }}
+            onDelete={(habitId) => {
+              Alert.alert('Delete Habit', 'Are you sure you want to delete this habit permanently?', [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Delete', style: 'destructive', onPress: () => deleteHabit.mutate(habitId) }
+              ]);
+            }}
           />
         )}
 
