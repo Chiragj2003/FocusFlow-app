@@ -1,31 +1,15 @@
 import React, { memo, useMemo, useCallback } from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { View, Text, Pressable, ScrollView, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-
-interface Habit {
-  id: string;
-  title: string;
-  color: string;
-  goalType: string;
-  goalTarget?: number | null;
-  unit?: string | null;
-  category?: string | null;
-}
-
-interface Entry {
-  id: string;
-  habitId: string;
-  entryDate: string;
-  completed: boolean;
-  value?: number | null;
-  notes?: string | null;
-}
+import { Habit, HabitEntry } from '@/lib/types';
 
 interface HabitGridMobileProps {
   habits: Habit[];
-  entries: Entry[];
+  entries: HabitEntry[];
   days: string[]; // ISO date strings for the current month
   onToggle: (habitId: string, date: string, completed: boolean) => void;
+  onArchive?: (habitId: string) => void;
+  onDelete?: (habitId: string) => void;
   colors: any;
 }
 
@@ -57,14 +41,14 @@ const DayCell = memo(({
         height: 32,
         marginHorizontal: 2,
         borderRadius: 8,
-        backgroundColor: completed ? (color || primaryColor) : 'transparent',
-        borderWidth: 2,
-        borderColor: color || primaryColor,
+        backgroundColor: completed ? (color || primaryColor) : 'rgba(39, 39, 42, 0.3)', // muted zinc background
+        borderWidth: 1,
+        borderColor: completed ? (color || primaryColor) : 'rgba(63, 63, 70, 0.5)', // zinc-700
         alignItems: 'center',
         justifyContent: 'center',
       }}
     >
-      {completed && <Ionicons name="checkmark" size={20} color="#fff" />}
+      {completed && <Ionicons name="checkmark" size={18} color="#fff" />}
     </Pressable>
   );
 });
@@ -77,39 +61,80 @@ const HabitRow = memo(({
   days,
   entriesMap,
   colors,
-  onToggle
+  onToggle,
+  onArchive,
+  onDelete
 }: {
   habit: Habit;
   days: string[];
-  entriesMap: Map<string, Entry>;
+  entriesMap: Map<string, HabitEntry>;
   colors: any;
   onToggle: (habitId: string, date: string, completed: boolean) => void;
+  onArchive?: (habitId: string) => void;
+  onDelete?: (habitId: string) => void;
 }) => {
+  const handleLongPress = useCallback(() => {
+    Alert.alert(
+      habit.title,
+      'Manage this habit',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Archive',
+          onPress: () => onArchive?.(habit.id),
+          style: 'default'
+        },
+        {
+          text: 'Delete',
+          onPress: () => onDelete?.(habit.id),
+          style: 'destructive'
+        }
+      ]
+    );
+  }, [habit, onArchive, onDelete]);
+
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-      <Text
-        style={{ width: 100, color: colors.text }}
-        numberOfLines={1}
-        ellipsizeMode="tail"
-      >
-        {habit.title}
-      </Text>
-      {days.map(date => {
-        const entryKey = `${habit.id}-${date}`;
-        const entry = entriesMap.get(entryKey);
-        const completed = !!entry?.completed;
-        return (
-          <DayCell
-            key={date}
-            habitId={habit.id}
-            date={date}
-            completed={completed}
-            color={habit.color}
-            primaryColor={colors.primary}
-            onToggle={onToggle}
+    <View className="mb-4">
+      <View className="flex-row items-center justify-between mb-2 px-1">
+        <Pressable
+          onLongPress={handleLongPress}
+          className="flex-row items-center flex-1 mr-4"
+        >
+          <View
+            className="w-3 h-3 rounded-full mr-2"
+            style={{ backgroundColor: habit.color || colors.primary }}
           />
-        );
-      })}
+          <Text
+            className="font-medium text-sm text-zinc-200"
+            numberOfLines={1}
+          >
+            {habit.title}
+          </Text>
+        </Pressable>
+
+        <Pressable onPress={handleLongPress} hitSlop={10}>
+          <Ionicons name="ellipsis-horizontal" size={16} color="#71717a" />
+        </Pressable>
+      </View>
+
+      <View className="flex-row">
+        {days.map(date => {
+          const entryKey = `${habit.id}-${date}`;
+          const entry = entriesMap.get(entryKey);
+          const completed = !!entry?.completed;
+          return (
+            <DayCell
+              key={date}
+              habitId={habit.id}
+              date={date}
+              completed={completed}
+              color={habit.color || colors.primary}
+              primaryColor={colors.primary}
+              onToggle={onToggle}
+            />
+          );
+        })}
+      </View>
     </View>
   );
 });
@@ -119,13 +144,26 @@ HabitRow.displayName = 'HabitRow';
 // Memoized header component
 const GridHeader = memo(({ days, colors }: { days: string[]; colors: any }) => {
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-      <Text style={{ width: 100, fontWeight: 'bold', color: colors.text }}>Habit</Text>
-      {days.map(date => (
-        <Text key={date} style={{ width: 36, textAlign: 'center', color: colors.textMuted }}>
-          {new Date(date).getDate()}
-        </Text>
-      ))}
+    <View className="flex-row mb-3 pl-1">
+      {days.map(date => {
+        const d = new Date(date);
+        const dayNum = d.getDate();
+        const dayName = d.toLocaleDateString('en-US', { weekday: 'narrow' });
+        const isToday = new Date().toDateString() === d.toDateString();
+
+        return (
+          <View key={date} style={{ width: 32, marginHorizontal: 2, alignItems: 'center' }}>
+            <Text style={{ fontSize: 10, color: '#71717a', marginBottom: 2 }}>{dayName}</Text>
+            <Text style={{
+              fontSize: 12,
+              fontWeight: isToday ? 'bold' : 'normal',
+              color: isToday ? colors.primary : '#a1a1aa'
+            }}>
+              {dayNum}
+            </Text>
+          </View>
+        );
+      })}
     </View>
   );
 });
@@ -137,11 +175,13 @@ export const HabitGridMobile: React.FC<HabitGridMobileProps> = memo(({
   entries,
   days,
   onToggle,
+  onArchive,
+  onDelete,
   colors
 }) => {
   // Create a lookup map for O(1) entry access instead of O(n) find operations
   const entriesMap = useMemo(() => {
-    const map = new Map<string, Entry>();
+    const map = new Map<string, HabitEntry>();
     entries.forEach(entry => {
       map.set(`${entry.habitId}-${entry.entryDate}`, entry);
     });
@@ -154,7 +194,12 @@ export const HabitGridMobile: React.FC<HabitGridMobileProps> = memo(({
   }, [onToggle]);
 
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 16 }}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      className="bg-zinc-900/30 border border-zinc-800/50 rounded-xl p-4"
+      contentContainerStyle={{ paddingRight: 16 }}
+    >
       <View>
         <GridHeader days={days} colors={colors} />
         {habits.map(habit => (
@@ -165,8 +210,11 @@ export const HabitGridMobile: React.FC<HabitGridMobileProps> = memo(({
             entriesMap={entriesMap}
             colors={colors}
             onToggle={stableOnToggle}
+            onArchive={onArchive}
+            onDelete={onDelete}
           />
         ))}
+        {/* Weekly stats footer can go here if needed, but we have summary cards now */}
       </View>
     </ScrollView>
   );
