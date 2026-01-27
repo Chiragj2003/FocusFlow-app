@@ -514,8 +514,8 @@ export function getCurrentMonthRange() {
   const end = new Date(year, month + 1, 0);
 
   return {
-    start: start.toISOString().split('T')[0],
-    end: end.toISOString().split('T')[0],
+    start: formatDateLocal(start),
+    end: formatDateLocal(end),
   };
 }
 

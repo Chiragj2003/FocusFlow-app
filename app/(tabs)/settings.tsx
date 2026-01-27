@@ -22,7 +22,7 @@ export default function SettingsScreen() {
   const [notifications, setNotifications] = useState(true);
   const [dailyReminder, setDailyReminder] = useState(true);
   const [hapticFeedback, setHapticFeedback] = useState(true);
-  
+
   // Fetch user stats
   const { data: habits = [] } = useHabits(true);
   const { data: insights } = useInsights();
@@ -34,10 +34,10 @@ export default function SettingsScreen() {
   const completionRate = insights?.overallCompletionRate || 0;
 
   // Get user info - show Guest if not signed in
-  const userName = isSignedIn 
+  const userName = isSignedIn
     ? (user?.firstName || user?.emailAddresses?.[0]?.emailAddress?.split('@')[0] || 'User')
     : 'Guest User';
-  const userEmail = isSignedIn 
+  const userEmail = isSignedIn
     ? (user?.emailAddresses?.[0]?.emailAddress || '')
     : 'Data stored locally on device';
 
@@ -47,9 +47,9 @@ export default function SettingsScreen() {
       'Are you sure you want to sign out? Your cloud data will remain safe.',
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Sign Out', 
-          style: 'destructive', 
+        {
+          text: 'Sign Out',
+          style: 'destructive',
           onPress: async () => {
             try {
               await signOut();
@@ -74,9 +74,9 @@ export default function SettingsScreen() {
       'This will delete all habits and entries stored on this device. This cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Clear Data', 
-          style: 'destructive', 
+        {
+          text: 'Clear Data',
+          style: 'destructive',
           onPress: async () => {
             await guestStorage.clearGuestData();
             queryClient.clear();
@@ -93,9 +93,9 @@ export default function SettingsScreen() {
       'This action cannot be undone. All your data will be permanently deleted.',
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete', 
-          style: 'destructive', 
+        {
+          text: 'Delete',
+          style: 'destructive',
           onPress: () => {
             Alert.alert('Contact Support', 'Please contact support to delete your account.');
           }
@@ -119,41 +119,31 @@ export default function SettingsScreen() {
     <SafeAreaView style={{ backgroundColor: colors.background }} className="flex-1">
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <ScrollView className="flex-1 px-4" showsVerticalScrollIndicator={false}>
-        {/* Header with Gradient */}
-        <LinearGradient
-          colors={isDark ? ['#1e293b', '#334155'] : ['#f8fafc', '#e2e8f0']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          className="pt-4 pb-4 px-4 -mx-4 rounded-2xl mt-2"
-        >
+        {/* Header - Web Aligned */}
+        <View className="mb-6 mt-2">
           <Text style={{ color: colors.text }} className="text-3xl font-bold">Settings</Text>
-          <Text style={{ color: colors.textMuted }} className="mt-1 text-base">
+          <Text style={{ color: colors.textMuted }} className="mt-1 text-base text-zinc-400">
             Manage your preferences
           </Text>
-        </LinearGradient>
+        </View>
 
-        {/* Profile Section with Gradient */}
-        <LinearGradient
-          colors={isDark ? ['#1e293b', '#334155'] : ['#ffffff', '#f1f5f9']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          className="mt-4 rounded-2xl p-5"
+        {/* Profile Section - Zinc Style */}
+        <View
+          style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+          className="rounded-2xl border p-5"
         >
           <View className="flex-row items-center">
-            <LinearGradient
-              colors={['#f97316', '#ea580c']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              className="w-16 h-16 rounded-2xl items-center justify-center"
+            <View
+              className="w-16 h-16 rounded-2xl items-center justify-center bg-zinc-800"
             >
-              <Ionicons name="person" size={28} color="#ffffff" />
-            </LinearGradient>
+              <Ionicons name="person" size={28} color="#a1a1aa" />
+            </View>
             <View className="ml-4 flex-1">
               <Text style={{ color: colors.text }} className="text-xl font-bold">{userName}</Text>
               <Text style={{ color: colors.textMuted }} className="text-sm">{userEmail}</Text>
             </View>
             {isSignedIn ? (
-              <Pressable 
+              <Pressable
                 className="p-2"
                 onPress={() => Linking.openURL(`${API_URL}/settings`)}
               >
@@ -161,55 +151,34 @@ export default function SettingsScreen() {
               </Pressable>
             ) : (
               <Pressable onPress={handleSignIn}>
-                <LinearGradient
-                  colors={['#f97316', '#ea580c']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  className="px-5 py-2.5 rounded-full"
+                <View
+                  style={{ backgroundColor: colors.primary }}
+                  className="px-5 py-2.5 rounded-xl"
                 >
                   <Text className="text-white font-bold">Sign In</Text>
-                </LinearGradient>
+                </View>
               </Pressable>
             )}
           </View>
 
-          {/* User Stats with Gradient Backgrounds */}
-          <View className="flex-row mt-5 pt-4">
+          {/* User Stats - Flat Zinc Cards */}
+          <View className="flex-row mt-5 pt-4 border-t border-zinc-800/50" style={{ borderColor: colors.border }}>
             <View className="flex-1 items-center">
-              <LinearGradient
-                colors={['#3b82f6', '#2563eb']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                className="w-full py-3 rounded-xl items-center"
-              >
-                <Text className="text-white text-2xl font-bold">{totalHabits}</Text>
-                <Text className="text-white text-xs opacity-90">Habits</Text>
-              </LinearGradient>
+              <Text style={{ color: colors.text }} className="text-2xl font-bold">{totalHabits}</Text>
+              <Text style={{ color: colors.textMuted }} className="text-xs uppercase tracking-wider mt-1">Habits</Text>
             </View>
-            <View className="flex-1 items-center mx-2">
-              <LinearGradient
-                colors={['#f97316', '#ea580c']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                className="w-full py-3 rounded-xl items-center"
-              >
-                <Text className="text-white text-2xl font-bold">{currentStreak}</Text>
-                <Text className="text-white text-xs opacity-90">Day Streak</Text>
-              </LinearGradient>
-            </View>
+            <View className="w-px bg-zinc-800 mx-2" style={{ backgroundColor: colors.border }} />
             <View className="flex-1 items-center">
-              <LinearGradient
-                colors={['#22c55e', '#16a34a']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                className="w-full py-3 rounded-xl items-center"
-              >
-                <Text className="text-white text-2xl font-bold">{Math.round(completionRate)}%</Text>
-                <Text className="text-white text-xs opacity-90">Completion</Text>
-              </LinearGradient>
+              <Text style={{ color: colors.text }} className="text-2xl font-bold">{currentStreak}</Text>
+              <Text style={{ color: colors.textMuted }} className="text-xs uppercase tracking-wider mt-1">Streak</Text>
+            </View>
+            <View className="w-px bg-zinc-800 mx-2" style={{ backgroundColor: colors.border }} />
+            <View className="flex-1 items-center">
+              <Text style={{ color: colors.text }} className="text-2xl font-bold">{Math.round(completionRate)}%</Text>
+              <Text style={{ color: colors.textMuted }} className="text-xs uppercase tracking-wider mt-1">Done</Text>
             </View>
           </View>
-        </LinearGradient>
+        </View>
 
         {/* Notifications Section */}
         <View className="mt-6">
@@ -222,6 +191,7 @@ export default function SettingsScreen() {
               value={notifications}
               onToggle={setNotifications}
               isDark={isDark}
+              colors={colors}
             />
             <View style={{ backgroundColor: isDark ? 'rgba(39, 39, 42, 0.5)' : '#e4e4e7' }} className="h-px mx-4" />
             <SettingRow
@@ -231,6 +201,7 @@ export default function SettingsScreen() {
               value={dailyReminder}
               onToggle={setDailyReminder}
               isDark={isDark}
+              colors={colors}
             />
           </View>
         </View>
@@ -253,7 +224,7 @@ export default function SettingsScreen() {
               <View className="flex-row mt-2">
                 <Pressable
                   onPress={() => setMode('light')}
-                  style={{ 
+                  style={{
                     backgroundColor: mode === 'light' ? '#f97316' : (isDark ? '#27272a' : '#e4e4e7'),
                   }}
                   className="flex-1 py-3 rounded-xl mr-2 items-center flex-row justify-center"
@@ -263,7 +234,7 @@ export default function SettingsScreen() {
                 </Pressable>
                 <Pressable
                   onPress={() => setMode('dark')}
-                  style={{ 
+                  style={{
                     backgroundColor: mode === 'dark' ? '#f97316' : (isDark ? '#27272a' : '#e4e4e7'),
                   }}
                   className="flex-1 py-3 rounded-xl mr-2 items-center flex-row justify-center"
@@ -273,7 +244,7 @@ export default function SettingsScreen() {
                 </Pressable>
                 <Pressable
                   onPress={() => setMode('system')}
-                  style={{ 
+                  style={{
                     backgroundColor: mode === 'system' ? '#f97316' : (isDark ? '#27272a' : '#e4e4e7'),
                   }}
                   className="flex-1 py-3 rounded-xl items-center flex-row justify-center"
@@ -291,6 +262,7 @@ export default function SettingsScreen() {
               value={hapticFeedback}
               onToggle={setHapticFeedback}
               isDark={isDark}
+              colors={colors}
             />
           </View>
         </View>
@@ -305,6 +277,7 @@ export default function SettingsScreen() {
               subtitle="Download your habit data"
               onPress={handleExportData}
               isDark={isDark}
+              colors={colors}
             />
             <View style={{ backgroundColor: isDark ? 'rgba(39, 39, 42, 0.5)' : '#e4e4e7' }} className="h-px mx-4" />
             <SettingButton
@@ -313,6 +286,7 @@ export default function SettingsScreen() {
               subtitle="Open FocusFlow web app"
               onPress={() => Linking.openURL(API_URL)}
               isDark={isDark}
+              colors={colors}
             />
           </View>
         </View>
@@ -327,6 +301,7 @@ export default function SettingsScreen() {
               subtitle="FAQs and guides"
               onPress={() => Linking.openURL(`${API_URL}/help`)}
               isDark={isDark}
+              colors={colors}
             />
             <View style={{ backgroundColor: isDark ? 'rgba(39, 39, 42, 0.5)' : '#e4e4e7' }} className="h-px mx-4" />
             <SettingButton
@@ -335,6 +310,7 @@ export default function SettingsScreen() {
               subtitle="Help us improve"
               onPress={() => Linking.openURL('mailto:support@focusflow.app?subject=FocusFlow%20Feedback')}
               isDark={isDark}
+              colors={colors}
             />
             <View style={{ backgroundColor: isDark ? 'rgba(39, 39, 42, 0.5)' : '#e4e4e7' }} className="h-px mx-4" />
             <SettingButton
@@ -343,6 +319,7 @@ export default function SettingsScreen() {
               subtitle="Open FocusFlow web"
               onPress={() => Linking.openURL(API_URL)}
               isDark={isDark}
+              colors={colors}
             />
           </View>
         </View>
@@ -356,6 +333,7 @@ export default function SettingsScreen() {
               title="Privacy Policy"
               onPress={() => Linking.openURL(`${API_URL}/privacy`)}
               isDark={isDark}
+              colors={colors}
             />
             <View style={{ backgroundColor: isDark ? 'rgba(39, 39, 42, 0.5)' : '#e4e4e7' }} className="h-px mx-4" />
             <SettingButton
@@ -363,6 +341,7 @@ export default function SettingsScreen() {
               title="Terms of Service"
               onPress={() => Linking.openURL(`${API_URL}/terms`)}
               isDark={isDark}
+              colors={colors}
             />
           </View>
         </View>
@@ -371,7 +350,7 @@ export default function SettingsScreen() {
         <View className="mt-6">
           {isSignedIn ? (
             <>
-              <Pressable 
+              <Pressable
                 onPress={handleLogout}
                 style={{ backgroundColor: colors.surface, borderColor: colors.border }}
                 className="rounded-2xl border p-4 flex-row items-center justify-center"
@@ -380,7 +359,7 @@ export default function SettingsScreen() {
                 <Text className="text-orange-500 font-medium ml-2">Sign Out</Text>
               </Pressable>
 
-              <Pressable 
+              <Pressable
                 onPress={handleDeleteAccount}
                 className="mt-3 bg-red-500/10 rounded-2xl border border-red-500/20 p-4 flex-row items-center justify-center"
               >
@@ -401,7 +380,7 @@ export default function SettingsScreen() {
                 </Text>
               </View>
 
-              <Pressable 
+              <Pressable
                 onPress={handleSignIn}
                 className="bg-orange-500 rounded-2xl p-4 flex-row items-center justify-center"
               >
@@ -409,7 +388,7 @@ export default function SettingsScreen() {
                 <Text className="text-white font-medium ml-2">Sign In to Sync Data</Text>
               </Pressable>
 
-              <Pressable 
+              <Pressable
                 onPress={handleClearLocalData}
                 className="mt-3 bg-red-500/10 rounded-2xl border border-red-500/20 p-4 flex-row items-center justify-center"
               >
@@ -433,13 +412,14 @@ export default function SettingsScreen() {
 }
 
 // Setting Row with Toggle
-function SettingRow({ icon, title, subtitle, value, onToggle, isDark = true }: {
+function SettingRow({ icon, title, subtitle, value, onToggle, isDark = true, colors }: {
   icon: string;
   title: string;
   subtitle?: string;
   value: boolean;
   onToggle: (value: boolean) => void;
   isDark?: boolean;
+  colors: any;
 }) {
   return (
     <View className="flex-row items-center p-4">
@@ -447,8 +427,8 @@ function SettingRow({ icon, title, subtitle, value, onToggle, isDark = true }: {
         <Ionicons name={icon as any} size={20} color={isDark ? '#a1a1aa' : '#52525b'} />
       </View>
       <View className="flex-1 ml-3">
-        <Text style={{ color: isDark ? '#ffffff' : '#18181b' }} className="font-medium">{title}</Text>
-        {subtitle && <Text style={{ color: isDark ? '#71717a' : '#52525b' }} className="text-xs mt-0.5">{subtitle}</Text>}
+        <Text style={{ color: colors.text }} className="font-medium">{title}</Text>
+        {subtitle && <Text style={{ color: colors.textMuted }} className="text-xs mt-0.5">{subtitle}</Text>}
       </View>
       <Switch
         value={value}
@@ -461,12 +441,13 @@ function SettingRow({ icon, title, subtitle, value, onToggle, isDark = true }: {
 }
 
 // Setting Button (navigable)
-function SettingButton({ icon, title, subtitle, onPress, isDark = true }: {
+function SettingButton({ icon, title, subtitle, onPress, isDark = true, colors }: {
   icon: string;
   title: string;
   subtitle?: string;
   onPress: () => void;
   isDark?: boolean;
+  colors: any;
 }) {
   return (
     <Pressable onPress={onPress} className="flex-row items-center p-4">
@@ -474,10 +455,10 @@ function SettingButton({ icon, title, subtitle, onPress, isDark = true }: {
         <Ionicons name={icon as any} size={20} color={isDark ? '#a1a1aa' : '#52525b'} />
       </View>
       <View className="flex-1 ml-3">
-        <Text style={{ color: isDark ? '#ffffff' : '#18181b' }} className="font-medium">{title}</Text>
-        {subtitle && <Text style={{ color: isDark ? '#71717a' : '#52525b' }} className="text-xs mt-0.5">{subtitle}</Text>}
+        <Text style={{ color: colors.text }} className="font-medium">{title}</Text>
+        {subtitle && <Text style={{ color: colors.textMuted }} className="text-xs mt-0.5">{subtitle}</Text>}
       </View>
-      <Ionicons name="chevron-forward" size={18} color={isDark ? '#52525b' : '#a1a1aa'} />
+      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
     </Pressable>
   );
 }
