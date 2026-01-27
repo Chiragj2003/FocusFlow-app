@@ -18,21 +18,21 @@ SplashScreen.preventAutoHideAsync();
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      // Cache data for 5 minutes by default
-      staleTime: 5 * 60 * 1000,
-      // Keep unused data cached for 30 minutes
-      gcTime: 30 * 60 * 1000,
-      // Retry failed requests up to 2 times
-      retry: 2,
-      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
-      // Refetch on window focus for fresh data
-      refetchOnWindowFocus: false,
-      // Don't refetch on reconnect automatically
-      refetchOnReconnect: 'always',
+      // Show cached data immediately, refetch in background
+      staleTime: 30 * 1000, // 30 seconds - show stale data immediately
+      gcTime: 10 * 60 * 1000, // Keep cached for 10 minutes
+      // Reduce retries for faster failure
+      retry: 1,
+      retryDelay: 1000, // 1 second retry delay
+      // Refetch settings for mobile
+      refetchOnWindowFocus: false, // Mobile doesn't have windows
+      refetchOnReconnect: true,
+      // Show cached data immediately while fetching
+      refetchOnMount: 'always',
     },
     mutations: {
-      // Retry mutations once
-      retry: 1,
+      // Don't retry mutations - we handle errors ourselves
+      retry: 0,
     },
   },
 });

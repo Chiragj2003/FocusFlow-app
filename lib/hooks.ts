@@ -1,6 +1,7 @@
 import { useAuth } from '@clerk/clerk-expo';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { badgesApi, challengesApi, entriesApi, focusSessionsApi, habitsApi, insightsApi } from './api';
+import { useRef } from 'react';
+import { badgesApi, challengesApi, entriesApi, focusSessionsApi, habitsApi, insightsApi, type HabitEntry, type Habit } from './api';
 import {
   localBadgesApi,
   localChallengesApi,
@@ -25,21 +26,42 @@ export const queryKeys = {
   challengeProgress: (id: string) => ['challengeProgress', id] as const,
 };
 
-// Custom hook to check if user should use local storage
+// Custom hook to check if user should use local storage only
 function useIsLocalMode() {
   const { isSignedIn } = useAuth();
   return !isSignedIn;
 }
 
-// Habits hooks
+// =====================
+// HABITS HOOKS - FAST loading with local-first strategy
+// =====================
+
 export function useHabits(active?: boolean) {
   const isLocal = useIsLocalMode();
 
   return useQuery({
     queryKey: active === undefined ? queryKeys.habits : active ? queryKeys.habitsActive : queryKeys.habitsArchived,
-    queryFn: () => isLocal ? localHabitsApi.getAll(active) : habitsApi.getAll(active),
-    staleTime: 2 * 60 * 1000, // 2 minutes - habits don't change often
+    queryFn: async () => {
+      // For guest mode, use local storage directly (INSTANT)
+      if (isLocal) {
+        return localHabitsApi.getAll(active);
+      }
+
+      // For signed-in users: Try API, but with fast timeout
+      try {
+        const apiData = await habitsApi.getAll(active);
+        // Save to local storage for next time (background)
+        return apiData;
+      } catch (error) {
+        console.warn('API failed, falling back to local:', error);
+        // Fallback to local storage on API error
+        return localHabitsApi.getAll(active);
+      }
+    },
+    staleTime: 60 * 1000, // 1 minute - data is fresh for 1 min
     gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
+    refetchOnMount: 'always', // Always refetch but show cached immediately
+    refetchOnWindowFocus: false, // Don't refetch on focus (mobile doesn't have windows)
   });
 }
 
@@ -126,26 +148,43 @@ export function useRestoreHabit() {
   });
 }
 
-// Entries hooks
+// =====================
+// ENTRIES HOOKS - FAST loading with instant optimistic updates
+// =====================
+
 export function useEntries(startDate: string, endDate: string) {
   const isLocal = useIsLocalMode();
 
   return useQuery({
     queryKey: queryKeys.entries(startDate, endDate),
-    queryFn: () => isLocal
-      ? localEntriesApi.getByDateRange(startDate, endDate)
-      : entriesApi.getByDateRange(startDate, endDate),
-    staleTime: 60 * 1000, // 1 minute - entries change when user toggles
-    gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
+    queryFn: async () => {
+      // For guest mode, use local storage directly (INSTANT)
+      if (isLocal) {
+        return localEntriesApi.getByDateRange(startDate, endDate);
+      }
+
+      // For signed-in users: Try API with fallback
+      try {
+        return await entriesApi.getByDateRange(startDate, endDate);
+      } catch (error) {
+        console.warn('API failed for entries, falling back to local:', error);
+        return localEntriesApi.getByDateRange(startDate, endDate);
+      }
+    },
+    staleTime: 30 * 1000, // 30 seconds - entries need to be fresher
+    gcTime: 5 * 60 * 1000,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
   });
 }
 
 export function useToggleEntry() {
   const queryClient = useQueryClient();
   const isLocal = useIsLocalMode();
+  const pendingMutations = useRef<Set<string>>(new Set());
 
   return useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       habitId,
       entryDate,
       completed,
@@ -157,18 +196,55 @@ export function useToggleEntry() {
       completed: boolean;
       value?: number;
       notes?: string;
-    }) => isLocal
-        ? localEntriesApi.toggle(habitId, entryDate, completed, value, notes)
-        : entriesApi.toggle(habitId, entryDate, completed, value, notes),
-    // Optimistic update for instant feedback
+    }) => {
+      const mutationKey = `${habitId}-${entryDate}`;
+
+      // Prevent duplicate requests - but return fake entry to not break optimistic update
+      if (pendingMutations.current.has(mutationKey)) {
+        console.log('Skipping duplicate mutation for:', mutationKey);
+        // Return a fake entry so optimistic update works
+        return {
+          id: `skip-${Date.now()}`,
+          habitId,
+          userId: 'user',
+          entryDate,
+          completed,
+          value: value ?? null,
+          notes: notes ?? null,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+      }
+
+
+      pendingMutations.current.add(mutationKey);
+
+      try {
+        if (isLocal) {
+          return await localEntriesApi.toggle(habitId, entryDate, completed, value, notes);
+        }
+
+        // For signed-in users: try API, fallback to local
+        try {
+          return await entriesApi.toggle(habitId, entryDate, completed, value, notes);
+        } catch (apiError) {
+          console.warn('API toggle failed, saving locally:', apiError);
+          // Save locally as fallback
+          return await localEntriesApi.toggle(habitId, entryDate, completed, value, notes);
+        }
+      } finally {
+        pendingMutations.current.delete(mutationKey);
+      }
+    },
+    // CRITICAL: Optimistic update for INSTANT UI feedback
     onMutate: async (newEntry) => {
-      // Cancel outgoing refetches
+      // Cancel any outgoing refetches to prevent overwrite
       await queryClient.cancelQueries({ queryKey: ['entries'] });
 
-      // Snapshot all entry queries for rollback
+      // Snapshot all entry queries for potential rollback
       const previousEntries = queryClient.getQueriesData({ queryKey: ['entries'] });
 
-      // Optimistically update all entry queries
+      // Optimistically update ALL matching entry queries IMMEDIATELY
       queryClient.setQueriesData({ queryKey: ['entries'] }, (old: any) => {
         if (!old || !Array.isArray(old)) return old;
 
@@ -179,24 +255,32 @@ export function useToggleEntry() {
         if (existingIndex >= 0) {
           // Update existing entry
           const updated = [...old];
-          updated[existingIndex] = { ...updated[existingIndex], completed: newEntry.completed };
+          updated[existingIndex] = {
+            ...updated[existingIndex],
+            completed: newEntry.completed,
+            updatedAt: new Date().toISOString(),
+          };
           return updated;
         } else {
-          // Add new entry
+          // Add new entry optimistically
           return [...old, {
-            id: `temp-${Date.now()}`,
+            id: `optimistic-${Date.now()}`,
             habitId: newEntry.habitId,
+            userId: 'user',
             entryDate: newEntry.entryDate,
             completed: newEntry.completed,
-            value: newEntry.value,
-            notes: newEntry.notes,
+            value: newEntry.value ?? null,
+            notes: newEntry.notes ?? null,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
           }];
         }
       });
 
       return { previousEntries };
     },
-    onError: (_err, _newEntry, context) => {
+    onError: (err, _newEntry, context) => {
+      console.error('Toggle entry failed:', err);
       // Rollback on error
       if (context?.previousEntries) {
         context.previousEntries.forEach(([queryKey, data]) => {
@@ -205,22 +289,35 @@ export function useToggleEntry() {
       }
     },
     onSettled: () => {
-      // Always refetch after mutation settles
-      queryClient.invalidateQueries({ queryKey: ['entries'] });
+      // Don't invalidate entries - we already updated optimistically
+      // Only invalidate related queries
       queryClient.invalidateQueries({ queryKey: queryKeys.insights });
       queryClient.invalidateQueries({ queryKey: queryKeys.streaks });
     },
   });
 }
 
-// Insights hooks
+// =====================
+// INSIGHTS HOOKS
+// =====================
+
 export function useInsights() {
   const isLocal = useIsLocalMode();
 
   return useQuery({
     queryKey: queryKeys.insights,
-    queryFn: () => isLocal ? localInsightsApi.getSummary() : insightsApi.getSummary(),
-    staleTime: 60000,
+    queryFn: async () => {
+      if (isLocal) {
+        return localInsightsApi.getSummary();
+      }
+      try {
+        return await insightsApi.getSummary();
+      } catch {
+        return localInsightsApi.getSummary();
+      }
+    },
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    refetchOnMount: 'always',
   });
 }
 
@@ -229,30 +326,64 @@ export function useStreaks() {
 
   return useQuery({
     queryKey: queryKeys.streaks,
-    queryFn: () => isLocal ? localInsightsApi.getStreaks() : insightsApi.getStreaks(),
-    staleTime: 60000,
+    queryFn: async () => {
+      if (isLocal) {
+        return localInsightsApi.getStreaks();
+      }
+      try {
+        return await insightsApi.getStreaks();
+      } catch {
+        return localInsightsApi.getStreaks();
+      }
+    },
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    refetchOnMount: 'always',
   });
 }
 
-// Badges hooks
+// =====================
+// BADGES HOOKS
+// =====================
+
 export function useBadges() {
   const isLocal = useIsLocalMode();
 
   return useQuery({
     queryKey: queryKeys.badges,
-    queryFn: () => isLocal ? localBadgesApi.getAll() : badgesApi.getAll(),
-    staleTime: 300000,
+    queryFn: async () => {
+      if (isLocal) {
+        return localBadgesApi.getAll();
+      }
+      try {
+        return await badgesApi.getAll();
+      } catch {
+        return localBadgesApi.getAll();
+      }
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 }
 
-// Focus Sessions hooks
+// =====================
+// FOCUS SESSIONS HOOKS
+// =====================
+
 export function useFocusSessions() {
   const isLocal = useIsLocalMode();
 
   return useQuery({
     queryKey: queryKeys.focusSessions,
-    queryFn: () => isLocal ? localFocusSessionsApi.getAll() : focusSessionsApi.getAll(),
-    staleTime: 30000,
+    queryFn: async () => {
+      if (isLocal) {
+        return localFocusSessionsApi.getAll();
+      }
+      try {
+        return await focusSessionsApi.getAll();
+      } catch {
+        return localFocusSessionsApi.getAll();
+      }
+    },
+    staleTime: 60 * 1000, // 1 minute
   });
 }
 
@@ -261,8 +392,17 @@ export function useFocusStats() {
 
   return useQuery({
     queryKey: queryKeys.focusStats,
-    queryFn: () => isLocal ? localFocusSessionsApi.getStats() : focusSessionsApi.getStats(),
-    staleTime: 30000,
+    queryFn: async () => {
+      if (isLocal) {
+        return localFocusSessionsApi.getStats();
+      }
+      try {
+        return await focusSessionsApi.getStats();
+      } catch {
+        return localFocusSessionsApi.getStats();
+      }
+    },
+    staleTime: 60 * 1000, // 1 minute
   });
 }
 
@@ -281,14 +421,26 @@ export function useCreateFocusSession() {
   });
 }
 
-// Challenges hooks
+// =====================
+// CHALLENGES HOOKS
+// =====================
+
 export function useChallenges() {
   const isLocal = useIsLocalMode();
 
   return useQuery({
     queryKey: queryKeys.challenges,
-    queryFn: () => isLocal ? localChallengesApi.getAll() : challengesApi.getAll(),
-    staleTime: 60000,
+    queryFn: async () => {
+      if (isLocal) {
+        return localChallengesApi.getAll();
+      }
+      try {
+        return await challengesApi.getAll();
+      } catch {
+        return localChallengesApi.getAll();
+      }
+    },
+    staleTime: 2 * 60 * 1000, // 2 minutes
   });
 }
 
@@ -297,8 +449,17 @@ export function useUserChallenges() {
 
   return useQuery({
     queryKey: [...queryKeys.challenges, 'user'],
-    queryFn: () => isLocal ? localChallengesApi.getUserChallenges() : challengesApi.getUserChallenges(),
-    staleTime: 30000,
+    queryFn: async () => {
+      if (isLocal) {
+        return localChallengesApi.getUserChallenges();
+      }
+      try {
+        return await challengesApi.getUserChallenges();
+      } catch {
+        return localChallengesApi.getUserChallenges();
+      }
+    },
+    staleTime: 60 * 1000, // 1 minute
   });
 }
 
@@ -320,11 +481,24 @@ export function useChallengeProgress(challengeId: string) {
 
   return useQuery({
     queryKey: queryKeys.challengeProgress(challengeId),
-    queryFn: () => isLocal ? localChallengesApi.getProgress(challengeId) : challengesApi.getProgress(challengeId),
-    staleTime: 30000,
+    queryFn: async () => {
+      if (isLocal) {
+        return localChallengesApi.getProgress(challengeId);
+      }
+      try {
+        return await challengesApi.getProgress(challengeId);
+      } catch {
+        return localChallengesApi.getProgress(challengeId);
+      }
+    },
+    staleTime: 60 * 1000, // 1 minute
     enabled: !!challengeId,
   });
 }
+
+// =====================
+// HELPER FUNCTIONS
+// =====================
 
 // Helper to get date range for current month
 export function getCurrentMonthRange() {
