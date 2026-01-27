@@ -520,20 +520,28 @@ export function getMonthRange(year: number, month: number) {
   const end = new Date(year, month + 1, 0);
 
   return {
-    start: start.toISOString().split('T')[0],
-    end: end.toISOString().split('T')[0],
+    start: formatDateLocal(start),
+    end: formatDateLocal(end),
   };
+}
+
+// Helper to format date in local timezone (YYYY-MM-DD)
+function formatDateLocal(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 // Helper to format date
 export function formatDate(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date;
-  return d.toISOString().split('T')[0];
+  return formatDateLocal(d);
 }
 
 // Helper to get today's date
 export function getToday(): string {
-  return new Date().toISOString().split('T')[0];
+  return formatDateLocal(new Date());
 }
 
 // Helper to get all days in a month as date strings
@@ -543,7 +551,7 @@ export function getMonthDays(year: number, month: number): string[] {
 
   for (let day = 1; day <= daysInMonth; day++) {
     const date = new Date(year, month, day);
-    days.push(date.toISOString().split('T')[0]);
+    days.push(formatDateLocal(date));
   }
 
   return days;
