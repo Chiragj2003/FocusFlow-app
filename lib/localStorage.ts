@@ -17,7 +17,7 @@ const generateId = () => `local_${Date.now()}_${Math.random().toString(36).subst
 async function getAllHabits(active?: boolean): Promise<Habit[]> {
   const data = await AsyncStorage.getItem(STORAGE_KEYS.HABITS);
   const habits: Habit[] = data ? JSON.parse(data) : [];
-  
+
   if (active === undefined) return habits;
   return habits.filter(h => h.active === active);
 }
@@ -62,7 +62,7 @@ export const localHabitsApi = {
   }): Promise<Habit> {
     const habits = await getAllHabits();
     const now = new Date().toISOString();
-    
+
     const newHabit: Habit = {
       id: generateId(),
       userId: 'guest',
@@ -86,15 +86,15 @@ export const localHabitsApi = {
   async update(id: string, data: Partial<Habit>): Promise<Habit> {
     const habits = await getAllHabits();
     const index = habits.findIndex(h => h.id === id);
-    
+
     if (index === -1) throw new Error('Habit not found');
-    
+
     habits[index] = {
       ...habits[index],
       ...data,
       updatedAt: new Date().toISOString(),
     };
-    
+
     await AsyncStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(habits));
     return habits[index];
   },
@@ -103,7 +103,7 @@ export const localHabitsApi = {
     const habits = await getAllHabits();
     const filtered = habits.filter(h => h.id !== id);
     await AsyncStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(filtered));
-    
+
     // Also delete related entries
     const entries = await getAllEntries();
     const filteredEntries = entries.filter(e => e.habitId !== id);
@@ -177,12 +177,12 @@ export const localInsightsApi = {
   async getSummary(): Promise<InsightsSummary> {
     const habits = await getAllHabits(true);
     const entries = await getAllEntries();
-    
+
     // Get last 30 days
     const today = new Date();
     const thirtyDaysAgo = new Date(today);
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    
+
     const recentEntries = entries.filter(e => {
       const entryDate = new Date(e.entryDate);
       return entryDate >= thirtyDaysAgo && entryDate <= today;
@@ -191,8 +191,8 @@ export const localInsightsApi = {
     // Calculate overall completion
     const completedEntries = recentEntries.filter(e => e.completed);
     const totalPossible = habits.length * 30;
-    const overallCompletionRate = totalPossible > 0 
-      ? (completedEntries.length / totalPossible) * 100 
+    const overallCompletionRate = totalPossible > 0
+      ? completedEntries.length / totalPossible
       : 0;
 
     // Top habits
@@ -203,7 +203,7 @@ export const localInsightsApi = {
         habitId: habit.id,
         title: habit.title,
         color: habit.color,
-        completionRate: (completedCount / 30) * 100,
+        completionRate: completedCount / 30,
         completedCount,
         totalDays: 30,
       };
@@ -217,13 +217,13 @@ export const localInsightsApi = {
       const dateStr = date.toISOString().split('T')[0];
       const dayEntries = entries.filter(e => e.entryDate === dateStr);
       const completed = dayEntries.filter(e => e.completed).length;
-      
+
       weekly.push({
         day: date.toLocaleDateString('en-US', { weekday: 'short' }),
         date: dateStr,
         completed,
         total: habits.length,
-        rate: habits.length > 0 ? (completed / habits.length) * 100 : 0,
+        rate: habits.length > 0 ? completed / habits.length : 0,
       });
     }
 
@@ -239,7 +239,7 @@ export const localInsightsApi = {
   async getStreaks(): Promise<StreakData> {
     const habits = await getAllHabits(true);
     const entries = await getAllEntries();
-    
+
     // Calculate streaks for each habit
     const streaksByHabit = habits.map(habit => {
       const habitEntries = entries
@@ -251,10 +251,10 @@ export const localInsightsApi = {
       let currentStreak = 0;
       let longestStreak = 0;
       let tempStreak = 0;
-      
+
       const today = new Date();
       const checkDate = new Date(today);
-      
+
       // Calculate current streak
       for (let i = 0; i < 365; i++) {
         const dateStr = checkDate.toISOString().split('T')[0];
@@ -276,7 +276,7 @@ export const localInsightsApi = {
         const nextDate = new Date(date);
         nextDate.setDate(nextDate.getDate() + 1);
         const nextDateStr = nextDate.toISOString().split('T')[0];
-        
+
         if (habitEntries.includes(nextDateStr)) {
           tempStreak++;
         } else {
@@ -297,14 +297,14 @@ export const localInsightsApi = {
 
     // Overall current streak (all habits completed)
     let overallCurrentStreak = 0;
-    
+
     if (habits.length > 0) {
       const today = new Date();
       for (let i = 0; i < 365; i++) {
         const checkDate = new Date(today);
         checkDate.setDate(checkDate.getDate() - i);
         const dateStr = checkDate.toISOString().split('T')[0];
-        
+
         const dayEntries = entries.filter(e => e.entryDate === dateStr && e.completed);
         if (dayEntries.length >= habits.length) {
           overallCurrentStreak++;
@@ -414,7 +414,7 @@ export const localFocusSessionsApi = {
   async create(session: { habitId?: string; duration: number; notes?: string }): Promise<FocusSession> {
     const sessions = await getAllFocusSessions();
     const now = new Date().toISOString();
-    
+
     const newSession: FocusSession = {
       id: generateId(),
       userId: 'guest',
@@ -523,7 +523,7 @@ export const localChallengesApi = {
 
     // Calculate progress based on challenge type
     let progress = 0;
-    
+
     if (challenge.type === 'streak') {
       const streaks = await localInsightsApi.getStreaks();
       progress = Math.min(streaks.currentStreak, challenge.target);

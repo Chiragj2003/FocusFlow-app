@@ -18,7 +18,7 @@ export const setAuthTokenGetter = (getter: () => Promise<string | null>) => {
 
 const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000, // Reduced timeout for faster failure
+  timeout: 5000, // 5 second timeout for faster failure detection
   headers: {
     'Content-Type': 'application/json',
   },
@@ -173,11 +173,11 @@ export const habitsApi = {
     const response = await api.get<Habit[]>(`/api/habits?${params.toString()}`);
     return response.data;
   },
-  
-  create: async (habit: { 
-    title: string; 
+
+  create: async (habit: {
+    title: string;
     description?: string;
-    color?: string; 
+    color?: string;
     category?: string;
     goalType: 'binary' | 'duration' | 'quantity';
     goalTarget?: number;
@@ -203,11 +203,11 @@ export const habitsApi = {
     }>('/api/habits/ai-generate', { prompt });
     return response.data;
   },
-  
-  update: async (id: string, data: Partial<{ 
-    title: string; 
+
+  update: async (id: string, data: Partial<{
+    title: string;
     description: string;
-    color: string; 
+    color: string;
     category: string;
     active: boolean;
     goalType: 'binary' | 'duration' | 'quantity';
@@ -217,17 +217,17 @@ export const habitsApi = {
     const response = await api.patch<Habit>(`/api/habits/${id}`, data);
     return response.data;
   },
-  
+
   delete: async (id: string) => {
     const response = await api.delete(`/api/habits/${id}`);
     return response.data;
   },
-  
+
   archive: async (id: string) => {
     const response = await api.patch<Habit>(`/api/habits/${id}`, { active: false });
     return response.data;
   },
-  
+
   restore: async (id: string) => {
     const response = await api.patch<Habit>(`/api/habits/${id}`, { active: true });
     return response.data;
@@ -237,23 +237,23 @@ export const habitsApi = {
 // Entries API
 export const entriesApi = {
   getByDateRange: async (startDate: string, endDate: string) => {
-    const response = await api.get<HabitEntry[]>('/api/entries', { 
-      params: { start: startDate, end: endDate } 
+    const response = await api.get<HabitEntry[]>('/api/entries', {
+      params: { start: startDate, end: endDate }
     });
     return response.data;
   },
-  
+
   toggle: async (habitId: string, entryDate: string, completed: boolean, value?: number, notes?: string) => {
-    const response = await api.post<HabitEntry>('/api/entries', { 
-      habitId, 
-      entryDate, 
+    const response = await api.post<HabitEntry>('/api/entries', {
+      habitId,
+      entryDate,
       completed,
       value,
       notes,
     });
     return response.data;
   },
-  
+
   update: async (id: string, data: { completed?: boolean; value?: number; notes?: string }) => {
     const response = await api.patch<HabitEntry>(`/api/entries/${id}`, data);
     return response.data;
@@ -266,7 +266,7 @@ export const insightsApi = {
     const response = await api.get<InsightsSummary>('/api/insights/summary');
     return response.data;
   },
-  
+
   getStreaks: async () => {
     const response = await api.get<StreakData>('/api/insights/streaks');
     return response.data;
@@ -287,21 +287,21 @@ export const focusSessionsApi = {
     const response = await api.get<FocusSession[]>('/api/focus');
     return response.data;
   },
-  
+
   getStats: async () => {
     const response = await api.get<FocusStats>('/api/focus/stats');
     return response.data;
   },
-  
-  create: async (session: { 
-    habitId?: string; 
-    duration: number; 
+
+  create: async (session: {
+    habitId?: string;
+    duration: number;
     notes?: string;
   }) => {
     const response = await api.post<FocusSession>('/api/focus', session);
     return response.data;
   },
-  
+
   delete: async (id: string) => {
     const response = await api.delete(`/api/focus/${id}`);
     return response.data;
@@ -314,17 +314,17 @@ export const challengesApi = {
     const response = await api.get<Challenge[]>('/api/challenges');
     return response.data;
   },
-  
+
   getUserChallenges: async () => {
     const response = await api.get<UserChallenge[]>('/api/challenges/user');
     return response.data;
   },
-  
+
   join: async (challengeId: string) => {
     const response = await api.post<UserChallenge>('/api/challenges/join', { challengeId });
     return response.data;
   },
-  
+
   getProgress: async (challengeId: string) => {
     const response = await api.get<{ progress: number; completed: boolean }>(`/api/challenges/${challengeId}/progress`);
     return response.data;

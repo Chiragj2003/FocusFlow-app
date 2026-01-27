@@ -1,17 +1,17 @@
 ﻿import { HabitGridMobile } from '@/components/HabitGridMobile';
 import { useTheme } from '@/lib/ThemeContext';
 import {
-    getMonthDays,
-    getMonthRange,
-    getToday,
-    useArchiveHabit,
-    useCreateHabit,
-    useDeleteHabit,
-    useEntries,
-    useGenerateHabitsWithAI,
-    useHabits,
-    useRestoreHabit,
-    useToggleEntry
+  getMonthDays,
+  getMonthRange,
+  getToday,
+  useArchiveHabit,
+  useCreateHabit,
+  useDeleteHabit,
+  useEntries,
+  useGenerateHabitsWithAI,
+  useHabits,
+  useRestoreHabit,
+  useToggleEntry
 } from '@/lib/hooks';
 import { HABIT_TEMPLATES, getTemplateCategories } from '@/lib/templates';
 import type { Habit, HabitEntry, HabitTemplate } from '@/lib/types';
@@ -20,7 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -53,7 +53,7 @@ export default function HabitsScreen() {
     unit?: string;
   }>>([]);
   const [selectedTemplateCategory, setSelectedTemplateCategory] = useState<string | null>(null);
-  
+
   // Form state
   const [newHabitTitle, setNewHabitTitle] = useState('');
   const [newHabitDescription, setNewHabitDescription] = useState('');
@@ -74,6 +74,9 @@ export default function HabitsScreen() {
   const { data: archivedHabits, refetch: refetchArchived } = useHabits(false);
   const { data: entries, refetch: refetchEntries } = useEntries(start, end);
 
+  // Track in-progress toggle operations to prevent double-taps
+  const pendingToggles = useRef<Set<string>>(new Set());
+
   // Mutations
   const createHabit = useCreateHabit();
   const archiveHabit = useArchiveHabit();
@@ -84,10 +87,19 @@ export default function HabitsScreen() {
 
   const habits = showArchived ? archivedHabits : activeHabits;
 
-  // Get today's entries for each habit
+  // Get today's entries for each habit - with memoized lookup for performance
+  const entriesMap = useMemo(() => {
+    if (!entries) return new Map<string, HabitEntry>();
+    const map = new Map<string, HabitEntry>();
+    entries.forEach((e: HabitEntry) => {
+      map.set(`${e.habitId}-${e.entryDate}`, e);
+    });
+    return map;
+  }, [entries]);
+
   const getTodayEntry = useCallback((habitId: string) => {
-    return entries?.find((e: HabitEntry) => e.habitId === habitId && e.entryDate === today);
-  }, [entries, today]);
+    return entriesMap.get(`${habitId}-${today}`);
+  }, [entriesMap, today]);
 
   // Calculate completion stats
   const completedCount = useMemo(() => {
@@ -97,8 +109,8 @@ export default function HabitsScreen() {
     }).length || 0;
   }, [activeHabits, getTodayEntry]);
 
-  const progressPercent = activeHabits && activeHabits.length > 0 
-    ? Math.round((completedCount / activeHabits.length) * 100) 
+  const progressPercent = activeHabits && activeHabits.length > 0
+    ? Math.round((completedCount / activeHabits.length) * 100)
     : 0;
 
   const onRefresh = useCallback(async () => {
@@ -107,25 +119,43 @@ export default function HabitsScreen() {
     setRefreshing(false);
   }, [refetchHabits, refetchArchived, refetchEntries]);
 
-  const handleToggleHabit = useCallback(async (habitId: string) => {
+  // IMPROVED: Fast toggle handler with debounce protection
+  const handleToggleHabit = useCallback((habitId: string) => {
+    const toggleKey = `${habitId}-${today}`;
+
+    // Prevent double-tap by checking if toggle is already in progress
+    if (pendingToggles.current.has(toggleKey)) {
+      console.log('Toggle already in progress for:', toggleKey);
+      return;
+    }
+
     const currentEntry = getTodayEntry(habitId);
     const newCompleted = !currentEntry?.completed;
-    
-    // Haptic feedback
-    try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    } catch {}
-    
-    try {
-      await toggleEntry.mutateAsync({
+
+    // Haptic feedback - fire and forget
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
+
+    // Mark as pending
+    pendingToggles.current.add(toggleKey);
+
+    // Fire mutation - uses optimistic update for instant UI feedback
+    toggleEntry.mutate(
+      {
         habitId,
         entryDate: today,
         completed: newCompleted,
-      });
-    } catch (error) {
-      console.error('Failed to toggle habit:', error);
-      Alert.alert('Error', 'Failed to update habit. Please try again.');
-    }
+      },
+      {
+        onSettled: () => {
+          // Clear pending state when done
+          pendingToggles.current.delete(toggleKey);
+        },
+        onError: (error) => {
+          console.error('Failed to toggle habit:', error);
+          Alert.alert('Error', 'Failed to update habit. Please try again.');
+        },
+      }
+    );
   }, [getTodayEntry, today, toggleEntry]);
 
   // AI Habit Generation
@@ -164,11 +194,11 @@ export default function HabitsScreen() {
         goalTarget: suggestion.goalTarget,
         unit: suggestion.unit,
       });
-      
+
       // Remove from suggestions
       setAISuggestions(prev => prev.filter(s => s.title !== suggestion.title));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      
+
       if (aiSuggestions.length === 1) {
         setShowAIGenerator(false);
         setAIPrompt('');
@@ -195,7 +225,7 @@ export default function HabitsScreen() {
         goalTarget: goalTarget ? parseInt(goalTarget) : undefined,
         unit: goalUnit || undefined,
       });
-      
+
       // Reset form
       setNewHabitTitle('');
       setNewHabitDescription('');
@@ -231,8 +261,8 @@ export default function HabitsScreen() {
       `Are you sure you want to archive "${habit.title}"?`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Archive', 
+        {
+          text: 'Archive',
           onPress: async () => {
             try {
               await archiveHabit.mutateAsync(habit.id);
@@ -259,8 +289,8 @@ export default function HabitsScreen() {
       `Are you sure you want to permanently delete "${habit.title}"? This cannot be undone.`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete', 
+        {
+          text: 'Delete',
           style: 'destructive',
           onPress: async () => {
             try {
@@ -274,7 +304,9 @@ export default function HabitsScreen() {
     );
   }, [deleteHabit]);
 
-  if (habitsLoading && !refreshing) {
+  // Only show loading screen on first load when there's NO cached data
+  // With our caching system, we should almost always have data immediately
+  if (habitsLoading && !activeHabits && !refreshing) {
     return (
       <SafeAreaView style={{ backgroundColor: colors.background }} className="flex-1 items-center justify-center">
         <ActivityIndicator size="large" color={colors.primary} />
@@ -286,7 +318,7 @@ export default function HabitsScreen() {
   return (
     <SafeAreaView style={{ backgroundColor: colors.background }} className="flex-1">
       <StatusBar style={isDark ? 'light' : 'dark'} />
-      <ScrollView 
+      <ScrollView
         className="flex-1 px-4"
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
@@ -306,7 +338,7 @@ export default function HabitsScreen() {
               {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
             </Text>
           </View>
-          <Pressable 
+          <Pressable
             onPress={() => setIsModalOpen(true)}
           >
             <LinearGradient
@@ -323,7 +355,7 @@ export default function HabitsScreen() {
 
         {/* Toggle Active/Archived */}
         <View className="mt-4 flex-row">
-          <Pressable 
+          <Pressable
             style={{ backgroundColor: !showArchived ? colors.primary : colors.backgroundTertiary }}
             className="flex-1 py-2.5 rounded-xl mr-2"
             onPress={() => setShowArchived(false)}
@@ -332,7 +364,7 @@ export default function HabitsScreen() {
               Active ({activeHabits?.length || 0})
             </Text>
           </Pressable>
-          <Pressable 
+          <Pressable
             style={{ backgroundColor: showArchived ? colors.primary : colors.backgroundTertiary }}
             className="flex-1 py-2.5 rounded-xl"
             onPress={() => setShowArchived(true)}
@@ -360,7 +392,7 @@ export default function HabitsScreen() {
                 <Text style={{ color: isDark ? '#fff' : '#1e40af' }} className="text-3xl font-bold">{progressPercent}%</Text>
               </View>
             </View>
-            
+
             <View className="flex-row items-center justify-between mb-3">
               <View className="flex-row items-center">
                 <Ionicons name="checkmark-circle" size={20} color={isDark ? '#93c5fd' : '#3b82f6'} />
@@ -369,9 +401,9 @@ export default function HabitsScreen() {
                 </Text>
               </View>
             </View>
-            
+
             <View style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(59,130,246,0.2)' }} className="h-3 rounded-full overflow-hidden">
-              <View 
+              <View
                 style={{ width: `${progressPercent}%`, backgroundColor: isDark ? '#60a5fa' : '#2563eb' }}
                 className="h-full rounded-full"
               />
@@ -396,7 +428,32 @@ export default function HabitsScreen() {
             entries={entries}
             days={monthDays}
             onToggle={(habitId, date, completed) => {
-              toggleEntry.mutate({ habitId, entryDate: date, completed });
+              const toggleKey = `${habitId}-${date}`;
+
+              // Prevent double-tap
+              if (pendingToggles.current.has(toggleKey)) {
+                return;
+              }
+
+              // Haptic feedback
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
+
+              // Mark as pending
+              pendingToggles.current.add(toggleKey);
+
+              // Use mutation with optimistic update
+              toggleEntry.mutate(
+                { habitId, entryDate: date, completed },
+                {
+                  onSettled: () => {
+                    pendingToggles.current.delete(toggleKey);
+                  },
+                  onError: (error) => {
+                    console.error('Failed to toggle habit in grid:', error);
+                    Alert.alert('Error', 'Failed to update habit. Please try again.');
+                  },
+                }
+              );
             }}
             colors={colors}
           />
@@ -408,16 +465,16 @@ export default function HabitsScreen() {
             habits.map((habit: Habit) => {
               const todayEntry = getTodayEntry(habit.id);
               const isCompleted = todayEntry?.completed || false;
-              
+
               return (
-                <View 
+                <View
                   key={habit.id}
                   style={{ backgroundColor: colors.surface, borderColor: isCompleted ? habit.color : colors.border }}
                   className="rounded-2xl border-2 p-4 mb-3 flex-row items-center"
                 >
                   {/* Checkbox - Improved visibility with gradient on completion */}
                   {isCompleted ? (
-                    <Pressable 
+                    <Pressable
                       onPress={() => {
                         if (!showArchived) {
                           handleToggleHabit(habit.id);
@@ -434,23 +491,23 @@ export default function HabitsScreen() {
                       </LinearGradient>
                     </Pressable>
                   ) : (
-                    <Pressable 
+                    <Pressable
                       onPress={() => {
                         if (!showArchived) {
                           handleToggleHabit(habit.id);
                         }
                       }}
                       className="w-12 h-12 rounded-xl items-center justify-center mr-4"
-                      style={{ 
+                      style={{
                         borderWidth: 3,
                         borderColor: habit.color || colors.primary,
                         backgroundColor: 'transparent'
                       }}
                     />
                   )}
-                  
+
                   {/* Habit Info - Pressable for long press actions */}
-                  <Pressable 
+                  <Pressable
                     className="flex-1"
                     onPress={() => {
                       if (!showArchived) {
@@ -481,11 +538,11 @@ export default function HabitsScreen() {
                     }}
                   >
                     <View className="flex-row items-center justify-between mb-1">
-                      <Text 
-                        style={{ 
+                      <Text
+                        style={{
                           color: isCompleted ? colors.textMuted : colors.text,
                           textDecorationLine: isCompleted ? 'line-through' : 'none'
-                        }} 
+                        }}
                         className="text-lg font-semibold flex-1"
                       >
                         {habit.title}
@@ -508,7 +565,7 @@ export default function HabitsScreen() {
                         <Text style={{ color: colors.success }} className="text-xs font-medium">Done</Text>
                       </View>
                     )}
-                    <View 
+                    <View
                       className="w-2 h-8 rounded-full"
                       style={{ backgroundColor: habit.color || colors.primary }}
                     />
@@ -523,7 +580,7 @@ export default function HabitsScreen() {
                 {showArchived ? 'No archived habits' : 'No habits yet'}
               </Text>
               {!showArchived && (
-                <Pressable 
+                <Pressable
                   style={{ backgroundColor: colors.primary }}
                   className="mt-4 px-6 py-3 rounded-xl"
                   onPress={() => setIsModalOpen(true)}
@@ -593,9 +650,8 @@ export default function HabitsScreen() {
                     <Pressable
                       onPress={handleGenerateWithAI}
                       disabled={aiGenerating || !aiPrompt.trim()}
-                      className={`rounded-xl py-4 items-center mb-4 flex-row justify-center ${
-                        aiGenerating || !aiPrompt.trim() ? 'bg-zinc-700' : 'bg-gradient-to-r'
-                      }`}
+                      className={`rounded-xl py-4 items-center mb-4 flex-row justify-center ${aiGenerating || !aiPrompt.trim() ? 'bg-zinc-700' : 'bg-gradient-to-r'
+                        }`}
                       style={{ backgroundColor: aiGenerating || !aiPrompt.trim() ? '#3f3f46' : '#8b5cf6' }}
                     >
                       {aiGenerating ? (
@@ -630,7 +686,7 @@ export default function HabitsScreen() {
                         className="bg-zinc-800 rounded-xl p-4 mb-3 border border-zinc-700"
                       >
                         <View className="flex-row items-start">
-                          <View 
+                          <View
                             className="w-4 h-4 rounded-full mt-1 mr-3"
                             style={{ backgroundColor: suggestion.color }}
                           />
@@ -643,9 +699,9 @@ export default function HabitsScreen() {
                               </View>
                               <View className="bg-zinc-700 px-2 py-1 rounded-full">
                                 <Text className="text-zinc-400 text-xs">
-                                  {suggestion.goalType === 'binary' ? 'Yes/No' : 
-                                   suggestion.goalType === 'duration' ? `${suggestion.goalTarget} ${suggestion.unit}` :
-                                   `${suggestion.goalTarget} ${suggestion.unit}`}
+                                  {suggestion.goalType === 'binary' ? 'Yes/No' :
+                                    suggestion.goalType === 'duration' ? `${suggestion.goalTarget} ${suggestion.unit}` :
+                                      `${suggestion.goalTarget} ${suggestion.unit}`}
                                 </Text>
                               </View>
                             </View>
@@ -709,19 +765,19 @@ export default function HabitsScreen() {
                 {HABIT_TEMPLATES
                   .filter(t => !selectedTemplateCategory || t.category === selectedTemplateCategory)
                   .map((template) => (
-                  <Pressable
-                    key={template.id}
-                    onPress={() => handleSelectTemplate(template)}
-                    className="bg-zinc-800 rounded-xl p-4 mb-3 flex-row items-center"
-                  >
-                    <Text className="text-2xl mr-3">{template.icon}</Text>
-                    <View className="flex-1">
-                      <Text className="text-white font-medium">{template.title}</Text>
-                      <Text className="text-zinc-500 text-xs mt-0.5">{template.category}</Text>
-                    </View>
-                    <View className="w-3 h-3 rounded-full" style={{ backgroundColor: template.color }} />
-                  </Pressable>
-                ))}
+                    <Pressable
+                      key={template.id}
+                      onPress={() => handleSelectTemplate(template)}
+                      className="bg-zinc-800 rounded-xl p-4 mb-3 flex-row items-center"
+                    >
+                      <Text className="text-2xl mr-3">{template.icon}</Text>
+                      <View className="flex-1">
+                        <Text className="text-white font-medium">{template.title}</Text>
+                        <Text className="text-zinc-500 text-xs mt-0.5">{template.category}</Text>
+                      </View>
+                      <View className="w-3 h-3 rounded-full" style={{ backgroundColor: template.color }} />
+                    </Pressable>
+                  ))}
 
                 <Pressable
                   onPress={() => setShowTemplates(false)}
