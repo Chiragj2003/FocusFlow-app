@@ -16,7 +16,7 @@ export default function DashboardScreen() {
   const router = useRouter();
   const { start, end } = getCurrentMonthRange();
   const today = getToday();
-  
+
   // Fetch data using React Query hooks
   const { data: habits, isLoading: habitsLoading, refetch: refetchHabits } = useHabits(true);
   const { data: insights, isLoading: insightsLoading, refetch: refetchInsights } = useInsights();
@@ -37,11 +37,11 @@ export default function DashboardScreen() {
   // Get streak data
   const currentStreak = streaks?.currentStreak || 0;
   const bestStreak = streaks?.longestStreak || 0;
-  
+
   // Get completion rate from insights
   const weeklyRate = insights ? Math.round(insights.overallCompletionRate * 100) : 0;
   const totalCompleted = insights?.totalCompleted || 0;
-  
+
   // Get daily quote
   const quote = getDailyQuote();
   const streakMessage = getStreakMessage(currentStreak);
@@ -70,7 +70,7 @@ export default function DashboardScreen() {
   return (
     <SafeAreaView style={{ backgroundColor: colors.background }} className="flex-1">
       <StatusBar style={isDark ? 'light' : 'dark'} />
-      <ScrollView 
+      <ScrollView
         className="flex-1 px-4"
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
@@ -79,33 +79,52 @@ export default function DashboardScreen() {
       >
         {/* Header */}
         <View className="pt-4 pb-4">
-          <View className="flex-row items-center justify-between mb-2">
+          <View className="flex-row items-center justify-between mb-4">
             <View className="flex-1">
               <Text style={{ color: colors.text }} className="text-3xl font-bold">
                 FocusFlow
               </Text>
-              <Text style={{ color: colors.textMuted }} className="mt-1 text-sm">
-                {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+              <Text style={{ color: colors.textMuted }} className="mt-1 text-base text-zinc-400">
+                Let's make today count
               </Text>
             </View>
-            <View className="flex-row gap-2">
-              <Pressable 
-                style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-                className="px-3 py-2 rounded-xl border flex-row items-center"
-                onPress={() => router.push('/badges')}
-              >
-                <Ionicons name="trophy-outline" size={18} color={colors.primary} />
-                <Text style={{ color: colors.text }} className="font-semibold ml-1">{badges?.length || 0}</Text>
-              </Pressable>
-              <Pressable 
-                style={{ backgroundColor: colors.primary }}
-                className="px-4 py-2 rounded-xl flex-row items-center shadow-sm"
-                onPress={() => router.push('/habits')}
-              >
-                <Ionicons name="add" size={20} color="#fff" />
-                <Text className="text-white font-bold ml-1">New</Text>
-              </Pressable>
-            </View>
+            <Pressable
+              onPress={() => router.push('/habits')}
+              className="w-10 h-10 rounded-full items-center justify-center bg-zinc-800"
+            >
+              <Ionicons name="notifications-outline" size={20} color={colors.text} />
+            </Pressable>
+          </View>
+
+          {/* Quick Stats Grid */}
+          <View className="flex-row gap-3 mb-2">
+            <Pressable
+              style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+              className="flex-1 p-3 rounded-xl border flex-row items-center"
+              onPress={() => router.push('/habits')}
+            >
+              <View className="w-8 h-8 rounded-full bg-violet-500/10 items-center justify-center mr-3">
+                <Ionicons name="list" size={18} color="#8b5cf6" />
+              </View>
+              <View>
+                <Text style={{ color: colors.text }} className="font-bold text-lg">{todayTotal}</Text>
+                <Text style={{ color: colors.textMuted }} className="text-xs">Habits</Text>
+              </View>
+            </Pressable>
+
+            <Pressable
+              style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+              className="flex-1 p-3 rounded-xl border flex-row items-center"
+              onPress={() => router.push('/badges')}
+            >
+              <View className="w-8 h-8 rounded-full bg-amber-500/10 items-center justify-center mr-3">
+                <Ionicons name="trophy" size={18} color="#f59e0b" />
+              </View>
+              <View>
+                <Text style={{ color: colors.text }} className="font-bold text-lg">{badges?.length || 0}</Text>
+                <Text style={{ color: colors.textMuted }} className="text-xs">Badges</Text>
+              </View>
+            </Pressable>
           </View>
         </View>
 
@@ -151,9 +170,9 @@ export default function DashboardScreen() {
               <Text style={{ color: colors.primary }} className="text-2xl font-bold">{completionPercentage}%</Text>
             </View>
           </View>
-          
+
           <View style={{ backgroundColor: colors.backgroundTertiary }} className="h-3 rounded-full overflow-hidden mb-4">
-            <View 
+            <View
               style={{ width: `${completionPercentage}%`, backgroundColor: colors.primary }}
               className="h-full rounded-full"
             />
@@ -190,7 +209,7 @@ export default function DashboardScreen() {
         <View className="mt-4">
           <Text style={{ color: colors.text }} className="text-lg font-bold mb-3 px-1">Quick Stats</Text>
           <View className="flex-row flex-wrap justify-between">
-            <StatsCard 
+            <StatsCard
               title="Active Habits"
               value={habits?.length || 0}
               subtitle="being tracked"
@@ -198,7 +217,7 @@ export default function DashboardScreen() {
               colors={colors}
               gradient={['#3b82f6', '#2563eb']}
             />
-            <StatsCard 
+            <StatsCard
               title="Best Streak"
               value={bestStreak}
               subtitle="personal best"
@@ -206,7 +225,7 @@ export default function DashboardScreen() {
               colors={colors}
               gradient={['#f59e0b', '#d97706']}
             />
-            <StatsCard 
+            <StatsCard
               title="This Month"
               value={`${weeklyRate}%`}
               subtitle="completion rate"
@@ -214,7 +233,7 @@ export default function DashboardScreen() {
               colors={colors}
               gradient={['#22c55e', '#16a34a']}
             />
-            <StatsCard 
+            <StatsCard
               title="Completed"
               value={totalCompleted}
               subtitle="total this month"
@@ -238,12 +257,12 @@ export default function DashboardScreen() {
               </Pressable>
             </View>
             {insights.topHabits.slice(0, 3).map((habit: TopHabit, index: number) => (
-              <View 
-                key={habit.habitId} 
+              <View
+                key={habit.habitId}
                 style={{ borderColor: colors.border }}
                 className={`flex-row items-center py-3 ${index < 2 ? 'border-b' : ''}`}
               >
-                <View 
+                <View
                   className="w-12 h-12 rounded-2xl items-center justify-center mr-3 shadow-sm"
                   style={{ backgroundColor: habit.color + '20' }}
                 >
@@ -255,12 +274,12 @@ export default function DashboardScreen() {
                   <Text style={{ color: colors.text }} className="font-semibold text-base">{habit.title}</Text>
                   <View className="flex-row items-center mt-1">
                     <View style={{ backgroundColor: colors.backgroundTertiary }} className="flex-1 h-1.5 rounded-full mr-2">
-                      <View 
-                        style={{ 
-                          width: `${Math.round(habit.completionRate * 100)}%`, 
-                          backgroundColor: habit.color 
-                        }} 
-                        className="h-full rounded-full" 
+                      <View
+                        style={{
+                          width: `${Math.round(habit.completionRate * 100)}%`,
+                          backgroundColor: habit.color
+                        }}
+                        className="h-full rounded-full"
                       />
                     </View>
                     <Text style={{ color: colors.textMuted }} className="text-xs font-medium w-12 text-right">
@@ -307,30 +326,30 @@ export default function DashboardScreen() {
         <View className="mt-4 mb-8">
           <Text style={{ color: colors.text }} className="text-lg font-bold mb-3 px-1">Quick Actions</Text>
           <View className="flex-row justify-between">
-            <QuickActionButton 
-              icon="add-circle" 
-              label="New Habit" 
+            <QuickActionButton
+              icon="add-circle"
+              label="New Habit"
               onPress={() => router.push('/habits')}
               colors={colors}
               gradient={['#3b82f6', '#2563eb']}
             />
-            <QuickActionButton 
-              icon="time" 
-              label="Focus Timer" 
+            <QuickActionButton
+              icon="time"
+              label="Focus Timer"
               onPress={() => router.push('/focus')}
               colors={colors}
               gradient={['#8b5cf6', '#7c3aed']}
             />
-            <QuickActionButton 
-              icon="flag" 
-              label="Challenges" 
+            <QuickActionButton
+              icon="flag"
+              label="Challenges"
               onPress={() => router.push('/challenges')}
               colors={colors}
               gradient={['#f59e0b', '#d97706']}
             />
-            <QuickActionButton 
-              icon="calendar" 
-              label="Calendar" 
+            <QuickActionButton
+              icon="calendar"
+              label="Calendar"
               onPress={() => router.push('/calendar')}
               colors={colors}
               gradient={['#22c55e', '#16a34a']}
@@ -366,10 +385,10 @@ export default function DashboardScreen() {
 }
 
 // Stats Card Component
-function StatsCard({ title, value, subtitle, icon, colors, gradient }: { 
-  title: string; 
-  value: string | number; 
-  subtitle: string; 
+function StatsCard({ title, value, subtitle, icon, colors, gradient }: {
+  title: string;
+  value: string | number;
+  subtitle: string;
   icon: string;
   colors: any;
   gradient?: [string, string];
@@ -399,10 +418,10 @@ function StatsCard({ title, value, subtitle, icon, colors, gradient }: {
 }
 
 // Quick Action Button Component
-function QuickActionButton({ icon, label, onPress, colors, gradient }: { 
-  icon: string; 
-  label: string; 
-  onPress: () => void; 
+function QuickActionButton({ icon, label, onPress, colors, gradient }: {
+  icon: string;
+  label: string;
+  onPress: () => void;
   colors: any;
   gradient?: [string, string];
 }) {
