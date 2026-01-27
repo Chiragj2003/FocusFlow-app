@@ -165,7 +165,12 @@ export function useEntries(startDate: string, endDate: string) {
 
       // For signed-in users: Try API with fallback
       try {
-        return await entriesApi.getByDateRange(startDate, endDate);
+        const data = await entriesApi.getByDateRange(startDate, endDate);
+        // Normalize dates from API (remove time component)
+        return data.map(e => ({
+          ...e,
+          entryDate: typeof e.entryDate === 'string' ? e.entryDate.split('T')[0] : formatDate(e.entryDate)
+        }));
       } catch (error) {
         console.warn('API failed for entries, falling back to local:', error);
         return localEntriesApi.getByDateRange(startDate, endDate);
