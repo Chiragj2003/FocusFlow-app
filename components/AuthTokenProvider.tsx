@@ -1,5 +1,4 @@
 import { setAuthTokenGetter } from '@/lib/api';
-import { setConvexAuthTokenGetter } from '@/lib/convex';
 import { useAuth } from '@clerk/clerk-expo';
 import { useEffect } from 'react';
 
@@ -12,9 +11,8 @@ export function AuthTokenProvider({ children }: AuthTokenProviderProps) {
 
   useEffect(() => {
     if (!isSignedIn) {
-      // Clear auth tokens when user signs out
+      // Clear auth token when user signs out
       setAuthTokenGetter(async () => null);
-      setConvexAuthTokenGetter(async () => null);
       return;
     }
 
@@ -27,11 +25,10 @@ export function AuthTokenProvider({ children }: AuthTokenProviderProps) {
         return null;
       }
     };
-    // Set up auth token for both web API and Convex client
-    // so data syncs between mobile and web apps
+    // Set up auth token for web API
     setAuthTokenGetter(getter);
-    setConvexAuthTokenGetter(getter);
   }, [getToken, isSignedIn, userId]);
 
   return <>{children}</>;
 }
+
