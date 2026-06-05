@@ -654,35 +654,40 @@ export default function HabitsScreen() {
 
           {/* Filter Button */}
           <Pressable
-            className="flex-row items-center space-x-2 px-3 py-2 rounded-lg bg-zinc-800 active:bg-zinc-700"
+            style={{ backgroundColor: colors.backgroundTertiary }}
+            className="flex-row items-center space-x-2 px-3 py-2 rounded-lg active:opacity-80"
           >
-            <Ionicons name="filter" size={16} color="#a1a1aa" />
-            <Text className="text-zinc-400 font-medium text-sm">Filter</Text>
+            <Ionicons name="filter" size={16} color={colors.textMuted} />
+            <Text style={{ color: colors.textMuted }} className="font-medium text-sm">Filter</Text>
           </Pressable>
 
           {/* Sort Button */}
           <Pressable
-            className="flex-row items-center space-x-2 px-3 py-2 rounded-lg bg-zinc-800 active:bg-zinc-700"
+            style={{ backgroundColor: colors.backgroundTertiary }}
+            className="flex-row items-center space-x-2 px-3 py-2 rounded-lg active:opacity-80"
           >
-            <Ionicons name="swap-vertical" size={16} color="#a1a1aa" />
-            <Text className="text-zinc-400 font-medium text-sm">Newest</Text>
+            <Ionicons name="swap-vertical" size={16} color={colors.textMuted} />
+            <Text style={{ color: colors.textMuted }} className="font-medium text-sm">Newest</Text>
           </Pressable>
 
           {/* Archive Toggle */}
           <Pressable
             onPress={() => setShowArchived(!showArchived)}
-            className={`flex-row items-center space-x-2 px-3 py-2 rounded-lg border ${showArchived ? 'bg-zinc-700 border-zinc-600' : 'bg-zinc-800 border-transparent'
-              }`}
+            style={{ 
+              backgroundColor: showArchived ? colors.primary : colors.backgroundTertiary,
+              borderColor: showArchived ? colors.primary : 'transparent'
+            }}
+            className="flex-row items-center space-x-2 px-3 py-2 rounded-lg border"
           >
-            <Ionicons name="archive-outline" size={16} color={showArchived ? "#fff" : "#a1a1aa"} />
-            <Text className={`${showArchived ? 'text-white' : 'text-zinc-400'} font-medium text-sm`}>
+            <Ionicons name="archive-outline" size={16} color={showArchived ? "#fff" : colors.textMuted} />
+            <Text style={{ color: showArchived ? '#fff' : colors.textMuted }} className="font-medium text-sm">
               Archived ({archivedHabits?.length || 0})
             </Text>
           </Pressable>
         </ScrollView>
 
         {/* Stats Summary - New Web Style */}
-        <View className="mb-6 flex-row justify-between bg-zinc-900/50 p-4 rounded-xl border border-zinc-800/50">
+        <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="mb-6 flex-row justify-between p-4 rounded-xl border shadow-sm">
           <View>
             <Text style={{ color: colors.textMuted }} className="text-xs uppercase tracking-wider mb-1">Total Habits</Text>
             <Text style={{ color: colors.text }} className="text-2xl font-bold">{habits?.length || 0}</Text>
@@ -894,7 +899,8 @@ export default function HabitsScreen() {
             <View className="items-center mt-2 pb-8">
               <Pressable
                 onPress={() => setShowArchived(false)}
-                className="flex-row items-center justify-center bg-zinc-800 px-6 py-4 rounded-xl w-full border border-zinc-700 active:bg-zinc-700 shadow-sm"
+                style={{ backgroundColor: colors.backgroundTertiary, borderColor: colors.border }}
+                className="flex-row items-center justify-center px-6 py-4 rounded-xl w-full border active:opacity-80 shadow-sm"
               >
                 <Ionicons name="arrow-back" size={20} color={colors.text} />
                 <Text style={{ color: colors.text }} className="font-bold ml-2 text-base">Return to Main Habits</Text>
@@ -943,10 +949,10 @@ export default function HabitsScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           className="flex-1 justify-end bg-black/50"
         >
-          <View className="bg-zinc-900 rounded-t-3xl p-6 border-t border-zinc-800 max-h-[90%]">
+          <View style={{ backgroundColor: colors.background, borderTopColor: colors.border }} className="rounded-t-3xl p-6 border-t max-h-[90%]">
             {/* Modal Header */}
             <View className="flex-row items-center justify-between mb-4">
-              <Text className="text-xl font-bold text-white">
+              <Text style={{ color: colors.text }} className="text-xl font-bold">
                 {showTemplates ? 'Choose Template' : showAIGenerator ? 'AI Habit Generator' : 'New Habit'}
               </Text>
               <Pressable onPress={() => {
@@ -956,7 +962,7 @@ export default function HabitsScreen() {
                 setAIPrompt('');
                 setIsModalOpen(false);
               }}>
-                <Ionicons name="close" size={24} color="#71717a" />
+                <Ionicons name="close" size={24} color={colors.textMuted} />
               </Pressable>
             </View>
 
@@ -977,9 +983,10 @@ export default function HabitsScreen() {
 
                     <Text className="text-sm font-medium text-zinc-400 mb-2">What habits would you like to build?</Text>
                     <TextInput
-                      className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white text-base mb-4 min-h-[100px]"
+                      style={{ backgroundColor: colors.backgroundSecondary, borderColor: colors.border, color: colors.text }}
+                      className="border rounded-xl px-4 py-3 text-base mb-4 min-h-[100px]"
                       placeholder="e.g., I want to be healthier and more productive. I work from home and want to establish a morning routine."
-                      placeholderTextColor="#71717a"
+                      placeholderTextColor={colors.textMuted}
                       value={aiPrompt}
                       onChangeText={setAIPrompt}
                       multiline
@@ -989,9 +996,8 @@ export default function HabitsScreen() {
                     <Pressable
                       onPress={handleGenerateWithAI}
                       disabled={aiGenerating || !aiPrompt.trim()}
-                      className={`rounded-xl py-4 items-center mb-4 flex-row justify-center ${aiGenerating || !aiPrompt.trim() ? 'bg-zinc-700' : 'bg-gradient-to-r'
-                        }`}
-                      style={{ backgroundColor: aiGenerating || !aiPrompt.trim() ? '#3f3f46' : '#8b5cf6' }}
+                      className={`rounded-xl py-4 items-center mb-4 flex-row justify-center ${aiGenerating || !aiPrompt.trim() ? '' : 'bg-gradient-to-r'}`}
+                      style={{ backgroundColor: aiGenerating || !aiPrompt.trim() ? colors.backgroundTertiary : '#8b5cf6' }}
                     >
                       {aiGenerating ? (
                         <>
@@ -1022,7 +1028,8 @@ export default function HabitsScreen() {
                     {aiSuggestions.map((suggestion, index) => (
                       <View
                         key={index}
-                        className="bg-zinc-800 rounded-xl p-4 mb-3 border border-zinc-700"
+                        style={{ backgroundColor: colors.backgroundSecondary, borderColor: colors.border }}
+                        className="rounded-xl p-4 mb-3 border"
                       >
                         <View className="flex-row items-start">
                           <View
@@ -1030,14 +1037,14 @@ export default function HabitsScreen() {
                             style={{ backgroundColor: suggestion.color }}
                           />
                           <View className="flex-1">
-                            <Text className="text-white font-medium">{suggestion.title}</Text>
-                            <Text className="text-zinc-500 text-xs mt-1">{suggestion.description}</Text>
+                            <Text style={{ color: colors.text }} className="font-medium">{suggestion.title}</Text>
+                            <Text style={{ color: colors.textSecondary }} className="text-xs mt-1">{suggestion.description}</Text>
                             <View className="flex-row items-center mt-2">
-                              <View className="bg-zinc-700 px-2 py-1 rounded-full mr-2">
-                                <Text className="text-zinc-400 text-xs">{suggestion.category}</Text>
+                              <View style={{ backgroundColor: colors.backgroundTertiary }} className="px-2 py-1 rounded-full mr-2">
+                                <Text style={{ color: colors.textMuted }} className="text-xs">{suggestion.category}</Text>
                               </View>
-                              <View className="bg-zinc-700 px-2 py-1 rounded-full">
-                                <Text className="text-zinc-400 text-xs">
+                              <View style={{ backgroundColor: colors.backgroundTertiary }} className="px-2 py-1 rounded-full">
+                                <Text style={{ color: colors.textMuted }} className="text-xs">
                                   {suggestion.goalType === 'binary' ? 'Yes/No' :
                                     suggestion.goalType === 'duration' ? `${suggestion.goalTarget} ${suggestion.unit}` :
                                       `${suggestion.goalTarget} ${suggestion.unit}`}
@@ -1064,18 +1071,20 @@ export default function HabitsScreen() {
                         setAISuggestions([]);
                         setAIPrompt('');
                       }}
-                      className="bg-zinc-800 rounded-xl py-3 items-center mt-2 mb-4"
+                      style={{ backgroundColor: colors.backgroundSecondary }}
+                      className="rounded-xl py-3 items-center mt-2 mb-4"
                     >
-                      <Text className="text-zinc-400">Generate new suggestions</Text>
+                      <Text style={{ color: colors.textMuted }}>Generate new suggestions</Text>
                     </Pressable>
                   </>
                 )}
 
                 <Pressable
                   onPress={() => setShowAIGenerator(false)}
-                  className="bg-zinc-800 rounded-xl py-3 items-center mb-4"
+                  style={{ backgroundColor: colors.backgroundSecondary }}
+                  className="rounded-xl py-3 items-center mb-4"
                 >
-                  <Text className="text-zinc-400">Back to manual creation</Text>
+                  <Text style={{ color: colors.textMuted }}>Back to manual creation</Text>
                 </Pressable>
               </ScrollView>
             ) : showTemplates ? (
@@ -1085,17 +1094,19 @@ export default function HabitsScreen() {
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-4">
                   <Pressable
                     onPress={() => setSelectedTemplateCategory(null)}
-                    className={`px-4 py-2 rounded-xl mr-2 ${!selectedTemplateCategory ? 'bg-white' : 'bg-zinc-800'}`}
+                    style={{ backgroundColor: !selectedTemplateCategory ? colors.text : colors.backgroundSecondary }}
+                    className="px-4 py-2 rounded-xl mr-2"
                   >
-                    <Text className={!selectedTemplateCategory ? 'text-zinc-900 font-medium' : 'text-zinc-400'}>All</Text>
+                    <Text style={{ color: !selectedTemplateCategory ? colors.background : colors.textMuted }} className="font-medium">All</Text>
                   </Pressable>
                   {getTemplateCategories().map((cat) => (
                     <Pressable
                       key={cat}
                       onPress={() => setSelectedTemplateCategory(cat)}
-                      className={`px-4 py-2 rounded-xl mr-2 ${selectedTemplateCategory === cat ? 'bg-white' : 'bg-zinc-800'}`}
+                      style={{ backgroundColor: selectedTemplateCategory === cat ? colors.text : colors.backgroundSecondary }}
+                      className="px-4 py-2 rounded-xl mr-2"
                     >
-                      <Text className={selectedTemplateCategory === cat ? 'text-zinc-900 font-medium' : 'text-zinc-400'}>{cat}</Text>
+                      <Text style={{ color: selectedTemplateCategory === cat ? colors.background : colors.textMuted }} className="font-medium">{cat}</Text>
                     </Pressable>
                   ))}
                 </ScrollView>
@@ -1106,18 +1117,19 @@ export default function HabitsScreen() {
                   .map((template) => (
                     <View
                       key={template.id}
-                      className="bg-zinc-800 rounded-xl p-4 mb-3 flex-row items-center"
+                      style={{ backgroundColor: colors.backgroundSecondary }}
+                      className="rounded-xl p-4 mb-3 flex-row items-center"
                     >
                       <Text className="text-2xl mr-3">{template.icon}</Text>
                       <View className="flex-1">
-                        <Text className="text-white font-medium">{template.title}</Text>
-                        <Text className="text-zinc-500 text-xs mt-0.5">{template.description}</Text>
+                        <Text style={{ color: colors.text }} className="font-medium">{template.title}</Text>
+                        <Text style={{ color: colors.textSecondary }} className="text-xs mt-0.5">{template.description}</Text>
                         <View className="flex-row items-center mt-1">
-                          <View className="bg-zinc-700 px-2 py-0.5 rounded-full mr-2">
-                            <Text className="text-zinc-400 text-xs">{template.category}</Text>
+                          <View style={{ backgroundColor: colors.backgroundTertiary }} className="px-2 py-0.5 rounded-full mr-2">
+                            <Text style={{ color: colors.textMuted }} className="text-xs">{template.category}</Text>
                           </View>
                           {template.goalType !== 'binary' && (
-                            <Text className="text-zinc-500 text-xs">
+                            <Text style={{ color: colors.textSecondary }} className="text-xs">
                               {template.goalTarget} {template.unit}
                             </Text>
                           )}
@@ -1151,51 +1163,55 @@ export default function HabitsScreen() {
                 <View className="flex-row mb-4">
                   <Pressable
                     onPress={() => setShowTemplates(true)}
-                    className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 mr-2 flex-row items-center justify-center"
+                    style={{ backgroundColor: colors.backgroundSecondary, borderColor: colors.border }}
+                    className="flex-1 border rounded-xl px-4 py-3 mr-2 flex-row items-center justify-center"
                   >
                     <Ionicons name="flash" size={18} color="#f59e0b" />
-                    <Text className="text-zinc-300 ml-2 text-sm">Templates</Text>
+                    <Text style={{ color: colors.text }} className="ml-2 text-sm">Templates</Text>
                   </Pressable>
                   <Pressable
                     onPress={() => setShowAIGenerator(true)}
-                    className="flex-1 bg-purple-500/20 border border-purple-500/30 rounded-xl px-4 py-3 flex-row items-center justify-center"
+                    className="flex-1 bg-purple-500/10 border border-purple-500/20 rounded-xl px-4 py-3 flex-row items-center justify-center"
                   >
                     <Ionicons name="sparkles" size={18} color="#a855f7" />
-                    <Text className="text-purple-400 ml-2 text-sm">AI Generate</Text>
+                    <Text className="text-purple-500 ml-2 text-sm font-medium">AI Generate</Text>
                   </Pressable>
                 </View>
 
                 {/* Habit Title Input */}
-                <Text className="text-sm font-medium text-zinc-400 mb-2">Habit Name *</Text>
+                <Text style={{ color: colors.textMuted }} className="text-sm font-medium mb-2">Habit Name *</Text>
                 <TextInput
-                  className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white text-base mb-4"
+                  style={{ backgroundColor: colors.backgroundSecondary, borderColor: colors.border, color: colors.text }}
+                  className="border rounded-xl px-4 py-3 text-base mb-4"
                   placeholder="e.g., Morning Exercise"
-                  placeholderTextColor="#71717a"
+                  placeholderTextColor={colors.textMuted}
                   value={newHabitTitle}
                   onChangeText={setNewHabitTitle}
                 />
 
                 {/* Description Input */}
-                <Text className="text-sm font-medium text-zinc-400 mb-2">Description (optional)</Text>
+                <Text style={{ color: colors.textMuted }} className="text-sm font-medium mb-2">Description (optional)</Text>
                 <TextInput
-                  className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white text-base mb-4"
+                  style={{ backgroundColor: colors.backgroundSecondary, borderColor: colors.border, color: colors.text }}
+                  className="border rounded-xl px-4 py-3 text-base mb-4"
                   placeholder="Add details about this habit"
-                  placeholderTextColor="#71717a"
+                  placeholderTextColor={colors.textMuted}
                   value={newHabitDescription}
                   onChangeText={setNewHabitDescription}
                   multiline
                 />
 
                 {/* Goal Type */}
-                <Text className="text-sm font-medium text-zinc-400 mb-2">Goal Type</Text>
+                <Text style={{ color: colors.textMuted }} className="text-sm font-medium mb-2">Goal Type</Text>
                 <View className="flex-row mb-4">
                   {(['binary', 'duration', 'quantity'] as const).map((type) => (
                     <Pressable
                       key={type}
                       onPress={() => setGoalType(type)}
-                      className={`flex-1 py-2.5 rounded-xl mr-2 ${goalType === type ? 'bg-white' : 'bg-zinc-800'}`}
+                      style={{ backgroundColor: goalType === type ? colors.text : colors.backgroundSecondary }}
+                      className="flex-1 py-2.5 rounded-xl mr-2"
                     >
-                      <Text className={`text-center text-sm ${goalType === type ? 'text-zinc-900 font-medium' : 'text-zinc-400'}`}>
+                      <Text style={{ color: goalType === type ? colors.background : colors.textMuted }} className="text-center text-sm font-medium">
                         {type === 'binary' ? 'Yes/No' : type === 'duration' ? 'Duration' : 'Count'}
                       </Text>
                     </Pressable>
@@ -1206,22 +1222,24 @@ export default function HabitsScreen() {
                 {goalType !== 'binary' && (
                   <View className="flex-row mb-4">
                     <View className="flex-1 mr-2">
-                      <Text className="text-sm font-medium text-zinc-400 mb-2">Target</Text>
+                      <Text style={{ color: colors.textMuted }} className="text-sm font-medium mb-2">Target</Text>
                       <TextInput
-                        className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white text-base"
+                        style={{ backgroundColor: colors.backgroundSecondary, borderColor: colors.border, color: colors.text }}
+                        className="border rounded-xl px-4 py-3 text-base"
                         placeholder="e.g., 30"
-                        placeholderTextColor="#71717a"
+                        placeholderTextColor={colors.textMuted}
                         value={goalTarget}
                         onChangeText={setGoalTarget}
                         keyboardType="numeric"
                       />
                     </View>
                     <View className="flex-1">
-                      <Text className="text-sm font-medium text-zinc-400 mb-2">Unit</Text>
+                      <Text style={{ color: colors.textMuted }} className="text-sm font-medium mb-2">Unit</Text>
                       <TextInput
-                        className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white text-base"
+                        style={{ backgroundColor: colors.backgroundSecondary, borderColor: colors.border, color: colors.text }}
+                        className="border rounded-xl px-4 py-3 text-base"
                         placeholder={goalType === 'duration' ? 'minutes' : 'times'}
-                        placeholderTextColor="#71717a"
+                        placeholderTextColor={colors.textMuted}
                         value={goalUnit}
                         onChangeText={setGoalUnit}
                       />
@@ -1230,15 +1248,16 @@ export default function HabitsScreen() {
                 )}
 
                 {/* Category Picker */}
-                <Text className="text-sm font-medium text-zinc-400 mb-2">Category</Text>
+                <Text style={{ color: colors.textMuted }} className="text-sm font-medium mb-2">Category</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-4">
                   {categories.map((cat) => (
                     <Pressable
                       key={cat}
                       onPress={() => setSelectedCategory(selectedCategory === cat ? '' : cat)}
-                      className={`px-4 py-2 rounded-xl mr-2 ${selectedCategory === cat ? 'bg-white' : 'bg-zinc-800'}`}
+                      style={{ backgroundColor: selectedCategory === cat ? colors.text : colors.backgroundSecondary }}
+                      className="px-4 py-2 rounded-xl mr-2"
                     >
-                      <Text className={selectedCategory === cat ? 'text-zinc-900 font-medium' : 'text-zinc-400'}>
+                      <Text style={{ color: selectedCategory === cat ? colors.background : colors.textMuted }} className="font-medium">
                         {cat}
                       </Text>
                     </Pressable>
@@ -1246,7 +1265,7 @@ export default function HabitsScreen() {
                 </ScrollView>
 
                 {/* Color Picker */}
-                <Text className="text-sm font-medium text-zinc-400 mb-2">Color</Text>
+                <Text style={{ color: colors.textMuted }} className="text-sm font-medium mb-2">Color</Text>
                 <View className="flex-row flex-wrap mb-6">
                   {habitColors.map((color) => (
                     <Pressable
@@ -1266,12 +1285,13 @@ export default function HabitsScreen() {
                 <Pressable
                   onPress={handleAddHabit}
                   disabled={createHabit.isPending}
-                  className={`rounded-xl py-4 items-center mb-4 ${createHabit.isPending ? 'bg-zinc-700' : 'bg-white'}`}
+                  style={{ backgroundColor: createHabit.isPending ? colors.backgroundSecondary : colors.text }}
+                  className="rounded-xl py-4 items-center mb-4"
                 >
                   {createHabit.isPending ? (
-                    <ActivityIndicator color="#18181b" />
+                    <ActivityIndicator color={colors.text} />
                   ) : (
-                    <Text className="text-zinc-900 font-bold text-base">Add Habit</Text>
+                    <Text style={{ color: colors.background }} className="font-bold text-base">Add Habit</Text>
                   )}
                 </Pressable>
               </ScrollView>

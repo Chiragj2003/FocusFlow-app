@@ -340,15 +340,15 @@ export default function DashboardScreen() {
               colors={colors}
             />
             <QuickActionButton
-              icon="flag"
-              label="Challenges"
-              onPress={() => router.push('/challenges')}
+              icon="trophy"
+              label="Badges"
+              onPress={() => router.push('/badges')}
               colors={colors}
             />
             <QuickActionButton
-              icon="calendar"
-              label="Calendar"
-              onPress={() => router.push('/calendar')}
+              icon="star"
+              label="Achievements"
+              onPress={() => router.push('/achievements')}
               colors={colors}
             />
           </View>
