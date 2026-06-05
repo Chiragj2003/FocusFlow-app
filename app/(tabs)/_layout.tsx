@@ -1,4 +1,4 @@
-﻿import { useTheme } from '@/lib/ThemeContext';
+import { useTheme } from '@/lib/ThemeContext';
 import { useAuth } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
@@ -105,7 +105,7 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="challenges"
+        name="achievements"
         options={{
           href: null,
         }}

@@ -1,4 +1,4 @@
-﻿import { AuthTokenProvider } from '@/components/AuthTokenProvider';
+import { AuthTokenProvider } from '@/components/AuthTokenProvider';
 import { tokenCache } from '@/lib/auth';
 import { ThemeProvider, useTheme } from '@/lib/ThemeContext';
 import { ClerkLoaded, ClerkProvider } from '@clerk/clerk-expo';
@@ -44,18 +44,22 @@ if (!publishableKey) {
   throw new Error('Missing EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY in environment variables');
 }
 
+import { NavigationContainer } from '@react-navigation/native';
+
 function RootLayoutNav() {
   const { isDark } = useTheme();
 
   return (
-    <NavigationThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
-      </Stack>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
-    </NavigationThemeProvider>
+    <NavigationContainer independent={true}>
+      <NavigationThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
+        <Stack>
+          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
+        </Stack>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
+      </NavigationThemeProvider>
+    </NavigationContainer>
   );
 }
 

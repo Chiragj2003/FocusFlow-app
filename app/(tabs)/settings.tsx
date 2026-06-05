@@ -183,10 +183,11 @@ export default function SettingsScreen() {
           className="rounded-2xl border p-5"
         >
           <View className="flex-row items-center">
-            <View
-              className="w-16 h-16 rounded-2xl items-center justify-center bg-zinc-800"
+            <View 
+              style={{ backgroundColor: colors.backgroundSecondary }}
+              className="w-16 h-16 rounded-2xl items-center justify-center"
             >
-              <Ionicons name="person" size={28} color="#a1a1aa" />
+              <Ionicons name="person" size={28} color={colors.textMuted} />
             </View>
             <View className="ml-4 flex-1">
               <Text style={{ color: colors.text }} className="text-xl font-bold">{userName}</Text>
@@ -217,12 +218,12 @@ export default function SettingsScreen() {
               <Text style={{ color: colors.text }} className="text-2xl font-bold">{totalHabits}</Text>
               <Text style={{ color: colors.textMuted }} className="text-xs uppercase tracking-wider mt-1">Habits</Text>
             </View>
-            <View className="w-px bg-zinc-800 mx-2" style={{ backgroundColor: colors.border }} />
+            <View className="w-px mx-2" style={{ backgroundColor: colors.border }} />
             <View className="flex-1 items-center">
               <Text style={{ color: colors.text }} className="text-2xl font-bold">{currentStreak}</Text>
               <Text style={{ color: colors.textMuted }} className="text-xs uppercase tracking-wider mt-1">Streak</Text>
             </View>
-            <View className="w-px bg-zinc-800 mx-2" style={{ backgroundColor: colors.border }} />
+            <View className="w-px mx-2" style={{ backgroundColor: colors.border }} />
             <View className="flex-1 items-center">
               <Text style={{ color: colors.text }} className="text-2xl font-bold">{Math.round(completionRate)}%</Text>
               <Text style={{ color: colors.textMuted }} className="text-xs uppercase tracking-wider mt-1">Done</Text>
@@ -425,7 +426,7 @@ export default function SettingsScreen() {
                   <Ionicons name="information-circle" size={20} color="#f59e0b" />
                   <Text className="text-amber-500 font-medium ml-2">Guest Mode</Text>
                 </View>
-                <Text className="text-zinc-400 text-sm">
+                <Text style={{ color: colors.textMuted }} className="text-sm">
                   Your data is stored locally on this device. Sign in to sync across devices and back up to the cloud.
                 </Text>
               </View>
