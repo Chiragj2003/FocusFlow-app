@@ -1,4 +1,4 @@
-﻿import { HabitGridMobile } from '@/components/HabitGridMobile';
+import { HabitGridMobile } from '@/components/HabitGridMobile';
 import { useTheme } from '@/lib/ThemeContext';
 import {
   getMonthDays,
@@ -21,7 +21,7 @@ import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Pressable, RefreshControl, ScrollView, Text, TextInput, View, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Habit colors matching the web app
@@ -32,6 +32,223 @@ const habitColors = [
 
 // Categories
 const categories = ['Health', 'Learning', 'Mindfulness', 'Productivity', 'Fitness', 'Other'];
+
+// Local fallback colors and patterns for guest/offline AI habit generation
+const LOCAL_CATEGORY_COLORS: Record<string, string> = {
+  Health: '#22c55e',
+  Fitness: '#ef4444',
+  Mindfulness: '#a855f7',
+  Learning: '#3b82f6',
+  Productivity: '#f59e0b',
+  Social: '#ec4899',
+  Creative: '#8b5cf6',
+  Other: '#71717a',
+};
+
+const LOCAL_HABIT_PATTERNS = [
+  {
+    keywords: ['water', 'drink', 'hydrate', 'hydration'],
+    habit: {
+      title: 'Stay Hydrated',
+      description: 'Drink enough water to keep your body healthy and energized',
+      category: 'Health',
+      color: LOCAL_CATEGORY_COLORS.Health,
+      goalType: 'quantity' as const,
+      goalTarget: 8,
+      unit: 'glasses',
+    },
+  },
+  {
+    keywords: ['meditate', 'meditation', 'mindful', 'calm', 'peace'],
+    habit: {
+      title: 'Daily Meditation',
+      description: 'Take time to calm your mind and practice mindfulness',
+      category: 'Mindfulness',
+      color: LOCAL_CATEGORY_COLORS.Mindfulness,
+      goalType: 'duration' as const,
+      goalTarget: 10,
+      unit: 'minutes',
+    },
+  },
+  {
+    keywords: ['read', 'book', 'reading', 'literature'],
+    habit: {
+      title: 'Read Daily',
+      description: 'Expand your knowledge through consistent reading',
+      category: 'Learning',
+      color: LOCAL_CATEGORY_COLORS.Learning,
+      goalType: 'duration' as const,
+      goalTarget: 30,
+      unit: 'minutes',
+    },
+  },
+  {
+    keywords: ['exercise', 'workout', 'gym', 'fitness', 'train'],
+    habit: {
+      title: 'Daily Exercise',
+      description: 'Stay fit and healthy with regular physical activity',
+      category: 'Fitness',
+      color: LOCAL_CATEGORY_COLORS.Fitness,
+      goalType: 'duration' as const,
+      goalTarget: 30,
+      unit: 'minutes',
+    },
+  },
+  {
+    keywords: ['walk', 'steps', 'walking', 'stroll'],
+    habit: {
+      title: 'Daily Walk',
+      description: 'Get moving with a refreshing daily walk',
+      category: 'Fitness',
+      color: LOCAL_CATEGORY_COLORS.Fitness,
+      goalType: 'quantity' as const,
+      goalTarget: 10000,
+      unit: 'steps',
+    },
+  },
+  {
+    keywords: ['sleep', 'rest', 'bed', 'early'],
+    habit: {
+      title: 'Quality Sleep',
+      description: 'Prioritize rest for better health and productivity',
+      category: 'Health',
+      color: LOCAL_CATEGORY_COLORS.Health,
+      goalType: 'duration' as const,
+      goalTarget: 8,
+      unit: 'hours',
+    },
+  },
+  {
+    keywords: ['journal', 'write', 'diary', 'gratitude', 'reflect'],
+    habit: {
+      title: 'Daily Journaling',
+      description: 'Reflect on your day and cultivate gratitude',
+      category: 'Mindfulness',
+      color: LOCAL_CATEGORY_COLORS.Mindfulness,
+      goalType: 'binary' as const,
+    },
+  },
+  {
+    keywords: ['yoga', 'stretch', 'flexibility'],
+    habit: {
+      title: 'Practice Yoga',
+      description: 'Improve flexibility and mental clarity through yoga',
+      category: 'Fitness',
+      color: LOCAL_CATEGORY_COLORS.Fitness,
+      goalType: 'duration' as const,
+      goalTarget: 20,
+      unit: 'minutes',
+    },
+  },
+  {
+    keywords: ['learn', 'study', 'course', 'skill', 'language'],
+    habit: {
+      title: 'Learn Something New',
+      description: 'Invest in yourself by learning daily',
+      category: 'Learning',
+      color: LOCAL_CATEGORY_COLORS.Learning,
+      goalType: 'duration' as const,
+      goalTarget: 15,
+      unit: 'minutes',
+    },
+  },
+  {
+    keywords: ['code', 'program', 'develop', 'coding'],
+    habit: {
+      title: 'Code Daily',
+      description: 'Build your programming skills with daily practice',
+      category: 'Learning',
+      color: LOCAL_CATEGORY_COLORS.Learning,
+      goalType: 'duration' as const,
+      goalTarget: 30,
+      unit: 'minutes',
+    },
+  },
+  {
+    keywords: ['save', 'money', 'budget', 'invest'],
+    habit: {
+      title: 'Track Finances',
+      description: 'Stay on top of your financial goals',
+      category: 'Other',
+      color: LOCAL_CATEGORY_COLORS.Other,
+      goalType: 'binary' as const,
+    },
+  },
+  {
+    keywords: ['healthy', 'eat', 'nutrition', 'vegetable', 'fruit', 'diet'],
+    habit: {
+      title: 'Eat Healthy',
+      description: 'Nourish your body with nutritious food choices',
+      category: 'Health',
+      color: LOCAL_CATEGORY_COLORS.Health,
+      goalType: 'quantity' as const,
+      goalTarget: 5,
+      unit: 'servings',
+    },
+  },
+  {
+    keywords: ['social', 'friend', 'family', 'call', 'connect'],
+    habit: {
+      title: 'Stay Connected',
+      description: 'Maintain meaningful relationships with loved ones',
+      category: 'Other',
+      color: LOCAL_CATEGORY_COLORS.Other,
+      goalType: 'binary' as const,
+    },
+  },
+  {
+    keywords: ['art', 'draw', 'paint', 'create', 'creative', 'music'],
+    habit: {
+      title: 'Creative Practice',
+      description: 'Express yourself through creative activities',
+      category: 'Creative',
+      color: LOCAL_CATEGORY_COLORS.Creative,
+      goalType: 'duration' as const,
+      goalTarget: 20,
+      unit: 'minutes',
+    },
+  },
+  {
+    keywords: ['focus', 'productive', 'work', 'task', 'deep'],
+    habit: {
+      title: 'Deep Focus Work',
+      description: 'Accomplish more with dedicated focus time',
+      category: 'Productivity',
+      color: LOCAL_CATEGORY_COLORS.Productivity,
+      goalType: 'duration' as const,
+      goalTarget: 60,
+      unit: 'minutes',
+    },
+  },
+];
+
+function generateHabitLocally(userInput: string) {
+  const lowerInput = userInput.toLowerCase();
+  
+  for (const pattern of LOCAL_HABIT_PATTERNS) {
+    if (pattern.keywords.some(keyword => lowerInput.includes(keyword))) {
+      const numberMatch = userInput.match(/(\d+)/g);
+      if (numberMatch && pattern.habit.goalTarget) {
+        return {
+          ...pattern.habit,
+          goalTarget: parseInt(numberMatch[0], 10),
+        };
+      }
+      return pattern.habit;
+    }
+  }
+  
+  const capitalizedInput = userInput.charAt(0).toUpperCase() + userInput.slice(1).toLowerCase();
+  const shortTitle = capitalizedInput.split(' ').slice(0, 4).join(' ');
+  
+  return {
+    title: shortTitle.length > 30 ? shortTitle.slice(0, 30) + '...' : shortTitle,
+    description: `Make "${userInput}" a daily habit`,
+    category: 'Other',
+    color: LOCAL_CATEGORY_COLORS.Other,
+    goalType: 'binary' as const,
+  };
+}
 
 export default function HabitsScreen() {
   const { isDark, colors } = useTheme();
@@ -65,17 +282,30 @@ export default function HabitsScreen() {
 
   // Get current date info
   const today = getToday();
-  const now = new Date();
-  const { start, end } = getMonthRange(now.getFullYear(), now.getMonth());
-  const monthDays = getMonthDays(now.getFullYear(), now.getMonth());
+  const last5Days = useMemo(() => {
+    const days: string[] = [];
+    for (let i = 4; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      days.push(`${yyyy}-${mm}-${dd}`);
+    }
+    return days;
+  }, []);
+
+  const { start, end } = useMemo(() => {
+    return {
+      start: last5Days[0],
+      end: last5Days[4],
+    };
+  }, [last5Days]);
 
   // Fetch data
   const { data: activeHabits, isLoading: habitsLoading, refetch: refetchHabits } = useHabits(true);
   const { data: archivedHabits, refetch: refetchArchived } = useHabits(false);
   const { data: entries, refetch: refetchEntries } = useEntries(start, end);
-
-  // Track in-progress toggle operations to prevent double-taps
-  const pendingToggles = useRef<Set<string>>(new Set());
 
   // Mutations
   const createHabit = useCreateHabit();
@@ -119,24 +349,13 @@ export default function HabitsScreen() {
     setRefreshing(false);
   }, [refetchHabits, refetchArchived, refetchEntries]);
 
-  // IMPROVED: Fast toggle handler with debounce protection
+  // Fast toggle handler
   const handleToggleHabit = useCallback((habitId: string) => {
-    const toggleKey = `${habitId}-${today}`;
-
-    // Prevent double-tap by checking if toggle is already in progress
-    if (pendingToggles.current.has(toggleKey)) {
-      console.log('Toggle already in progress for:', toggleKey);
-      return;
-    }
-
     const currentEntry = getTodayEntry(habitId);
     const newCompleted = !currentEntry?.completed;
 
-    // Haptic feedback - fire and forget
+    // Haptic feedback
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
-
-    // Mark as pending
-    pendingToggles.current.add(toggleKey);
 
     // Fire mutation - uses optimistic update for instant UI feedback
     toggleEntry.mutate(
@@ -146,10 +365,6 @@ export default function HabitsScreen() {
         completed: newCompleted,
       },
       {
-        onSettled: () => {
-          // Clear pending state when done
-          pendingToggles.current.delete(toggleKey);
-        },
         onError: (error) => {
           console.error('Failed to toggle habit:', error);
           Alert.alert('Error', 'Failed to update habit. Please try again.');
@@ -165,15 +380,16 @@ export default function HabitsScreen() {
       return;
     }
 
-    if (!isSignedIn) {
-      Alert.alert('Sign In Required', 'AI habit generation requires signing in to your account.');
-      return;
-    }
-
     setAIGenerating(true);
     try {
-      const result = await generateWithAI.mutateAsync(aiPrompt);
-      setAISuggestions(result.habits);
+      if (isSignedIn) {
+        const result = await generateWithAI.mutateAsync(aiPrompt);
+        setAISuggestions(result.habits);
+      } else {
+        // Guest mode / offline: Use local fallback generation
+        const suggestion = generateHabitLocally(aiPrompt);
+        setAISuggestions([suggestion]);
+      }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
       console.error('Failed to generate habits:', error);
@@ -183,77 +399,124 @@ export default function HabitsScreen() {
     }
   }, [aiPrompt, isSignedIn, generateWithAI]);
 
-  const handleAddAISuggestion = useCallback(async (suggestion: typeof aiSuggestions[0]) => {
-    try {
-      await createHabit.mutateAsync({
-        title: suggestion.title,
-        description: suggestion.description,
-        category: suggestion.category,
-        color: suggestion.color,
-        goalType: suggestion.goalType,
-        goalTarget: suggestion.goalTarget,
-        unit: suggestion.unit,
-      });
-
-      // Remove from suggestions
-      setAISuggestions(prev => prev.filter(s => s.title !== suggestion.title));
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-      if (aiSuggestions.length === 1) {
-        setShowAIGenerator(false);
-        setAIPrompt('');
-      }
-    } catch (error) {
-      console.error('Failed to create habit:', error);
-      Alert.alert('Error', 'Failed to create habit. Please try again.');
+  const handleAddAISuggestion = useCallback((suggestion: typeof aiSuggestions[0]) => {
+    const titleNormalized = suggestion.title.trim().toLowerCase().replace(/\s+/g, ' ');
+    const isDuplicate = activeHabits?.some((h: Habit) => h.title.trim().toLowerCase().replace(/\s+/g, ' ') === titleNormalized);
+    if (isDuplicate) {
+      Alert.alert('Duplicate Habit', `A habit named "${suggestion.title}" already exists.`);
+      return;
     }
-  }, [createHabit, aiSuggestions]);
 
-  const handleAddHabit = useCallback(async () => {
+    // Update UI immediately
+    setAISuggestions(prev => prev.filter(s => s.title !== suggestion.title));
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    if (aiSuggestions.length === 1) {
+      setShowAIGenerator(false);
+      setAIPrompt('');
+    }
+
+    createHabit.mutate({
+      title: suggestion.title,
+      description: suggestion.description,
+      category: suggestion.category,
+      color: suggestion.color,
+      goalType: suggestion.goalType,
+      goalTarget: suggestion.goalTarget,
+      unit: suggestion.unit,
+    }, {
+      onError: (error: any) => {
+        console.error('Failed to create habit from AI:', error);
+        const serverMsg = error?.response?.data?.error || error?.response?.data?.details || error?.message;
+        Alert.alert('Error', serverMsg || 'Failed to create habit. Please try again.');
+      }
+    });
+  }, [createHabit, aiSuggestions, activeHabits]);
+
+  const handleAddHabit = useCallback(() => {
     if (!newHabitTitle.trim()) {
       Alert.alert('Error', 'Please enter a habit name');
       return;
     }
 
-    try {
-      await createHabit.mutateAsync({
-        title: newHabitTitle.trim(),
-        description: newHabitDescription.trim() || undefined,
-        category: selectedCategory || undefined,
-        color: selectedColor,
-        goalType: goalType,
-        goalTarget: goalTarget ? parseInt(goalTarget) : undefined,
-        unit: goalUnit || undefined,
-      });
-
-      // Reset form
-      setNewHabitTitle('');
-      setNewHabitDescription('');
-      setSelectedCategory('');
-      setGoalType('binary');
-      setGoalTarget('');
-      setGoalUnit('');
-      setShowTemplates(false);
-      setShowAIGenerator(false);
-      setAIPrompt('');
-      setAISuggestions([]);
-      setIsModalOpen(false);
-    } catch (error) {
-      console.error('Failed to create habit:', error);
-      Alert.alert('Error', 'Failed to create habit. Please try again.');
+    const titleNormalized = newHabitTitle.trim().toLowerCase().replace(/\s+/g, ' ');
+    const isDuplicate = activeHabits?.some((h: Habit) => h.title.trim().toLowerCase().replace(/\s+/g, ' ') === titleNormalized);
+    if (isDuplicate) {
+      Alert.alert('Duplicate Habit', 'A habit with this name already exists.');
+      return;
     }
-  }, [newHabitTitle, newHabitDescription, selectedCategory, selectedColor, goalType, goalTarget, goalUnit, createHabit]);
+
+    // Reset form immediately
+    setNewHabitTitle('');
+    setNewHabitDescription('');
+    setSelectedCategory('');
+    setGoalType('binary');
+    setGoalTarget('');
+    setGoalUnit('');
+    setShowTemplates(false);
+    setShowAIGenerator(false);
+    setAIPrompt('');
+    setAISuggestions([]);
+    setIsModalOpen(false);
+
+    createHabit.mutate({
+      title: newHabitTitle.trim(),
+      description: newHabitDescription.trim() || undefined,
+      category: selectedCategory || undefined,
+      color: selectedColor,
+      goalType: goalType,
+      goalTarget: goalTarget ? parseInt(goalTarget) : undefined,
+      unit: goalUnit || undefined,
+    }, {
+      onError: (error: any) => {
+        console.error('Failed to create habit:', error);
+        const serverMsg = error?.response?.data?.error || error?.response?.data?.details || error?.message;
+        Alert.alert('Error', serverMsg || 'Failed to create habit. Please try again.');
+      }
+    });
+  }, [newHabitTitle, newHabitDescription, selectedCategory, selectedColor, goalType, goalTarget, goalUnit, createHabit, activeHabits]);
 
   const handleSelectTemplate = useCallback((template: HabitTemplate) => {
-    setNewHabitTitle(template.title);
-    setNewHabitDescription(template.description);
-    setSelectedCategory(template.category);
-    setSelectedColor(template.color);
-    setGoalType(template.goalType);
-    setGoalTarget(template.goalTarget?.toString() || '');
-    setGoalUnit(template.unit || '');
-    setShowTemplates(false);
-  }, []);
+    const titleNormalized = template.title.trim().toLowerCase().replace(/\s+/g, ' ');
+    const isDuplicate = activeHabits?.some((h: Habit) => h.title.trim().toLowerCase().replace(/\s+/g, ' ') === titleNormalized);
+    if (isDuplicate) {
+      Alert.alert('Duplicate Habit', `A habit named "${template.title}" already exists.`);
+      return;
+    }
+
+    // Show confirmation with Save button
+    Alert.alert(
+      'Add Template',
+      `Add "${template.title}" as a new habit?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Save',
+          onPress: () => {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            setShowTemplates(false);
+            setIsModalOpen(false);
+
+            createHabit.mutate({
+              title: template.title,
+              description: template.description,
+              category: template.category,
+              color: template.color,
+              goalType: template.goalType,
+              goalTarget: template.goalTarget,
+              unit: template.unit,
+            }, {
+              onError: (error: any) => {
+                console.error('Failed to create habit from template:', error);
+                const serverMsg = error?.response?.data?.error || error?.response?.data?.details || error?.message;
+                Alert.alert('Error', serverMsg || 'Failed to create habit. Please try again.');
+              }
+            });
+          }
+        },
+      ]
+    );
+  }, [createHabit, activeHabits]);
 
   const handleArchiveHabit = useCallback((habit: Habit) => {
     Alert.alert(
@@ -263,24 +526,20 @@ export default function HabitsScreen() {
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Archive',
-          onPress: async () => {
-            try {
-              await archiveHabit.mutateAsync(habit.id);
-            } catch (error) {
-              Alert.alert('Error', 'Failed to archive habit.');
-            }
+          onPress: () => {
+            archiveHabit.mutate(habit.id, {
+              onError: () => Alert.alert('Error', 'Failed to archive habit.')
+            });
           }
         },
       ]
     );
   }, [archiveHabit]);
 
-  const handleRestoreHabit = useCallback(async (habit: Habit) => {
-    try {
-      await restoreHabit.mutateAsync(habit.id);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to restore habit.');
-    }
+  const handleRestoreHabit = useCallback((habit: Habit) => {
+    restoreHabit.mutate(habit.id, {
+      onError: () => Alert.alert('Error', 'Failed to restore habit.')
+    });
   }, [restoreHabit]);
 
   const handleDeleteHabit = useCallback((habit: Habit) => {
@@ -292,12 +551,10 @@ export default function HabitsScreen() {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteHabit.mutateAsync(habit.id);
-            } catch (error) {
-              Alert.alert('Error', 'Failed to delete habit.');
-            }
+          onPress: () => {
+            deleteHabit.mutate(habit.id, {
+              onError: () => Alert.alert('Error', 'Failed to delete habit.')
+            });
           }
         },
       ]
@@ -342,9 +599,21 @@ export default function HabitsScreen() {
           className="mb-6 flex-row"
           contentContainerStyle={{ gap: 8, paddingRight: 16 }}
         >
+          {/* Add Habit Button */}
+          <Pressable
+            onPress={() => setIsModalOpen(true)}
+            className="flex-row items-center space-x-2 px-3 py-2 rounded-lg bg-blue-500/10 active:bg-blue-500/20"
+          >
+            <Ionicons name="add" size={16} color="#3b82f6" />
+            <Text className="text-blue-400 font-medium text-sm">Add Habit</Text>
+          </Pressable>
+
           {/* AI Create Button */}
           <Pressable
-            onPress={() => setShowAIGenerator(true)}
+            onPress={() => {
+              setShowAIGenerator(true);
+              setIsModalOpen(true);
+            }}
             className="flex-row items-center space-x-2 px-3 py-2 rounded-lg bg-violet-500/10 active:bg-violet-500/20"
           >
             <Ionicons name="sparkles" size={16} color="#a78bfa" />
@@ -353,7 +622,10 @@ export default function HabitsScreen() {
 
           {/* Templates Button */}
           <Pressable
-            onPress={() => setShowTemplates(true)}
+            onPress={() => {
+              setShowTemplates(true);
+              setIsModalOpen(true);
+            }}
             className="flex-row items-center space-x-2 px-3 py-2 rounded-lg bg-amber-400/10 active:bg-amber-400/20"
           >
             <Ionicons name="grid" size={16} color="#fbbf24" />
@@ -429,41 +701,38 @@ export default function HabitsScreen() {
 
         {/* Habits List Header */}
         <View className="mt-6 flex-row items-center justify-between mb-2">
-          <Text style={{ color: colors.text }} className="text-lg font-bold">
-            {showArchived ? 'Archived Habits' : 'Your Habits'}
-          </Text>
+          <View className="flex-row items-center">
+            {showArchived && (
+              <Pressable
+                onPress={() => setShowArchived(false)}
+                className="mr-3 p-2 rounded-full bg-zinc-800 active:bg-zinc-700"
+              >
+                <Ionicons name="arrow-back" size={20} color={colors.text} />
+              </Pressable>
+            )}
+            <Text style={{ color: colors.text }} className="text-lg font-bold">
+              {showArchived ? 'Archived Habits' : 'Your Habits'}
+            </Text>
+          </View>
           <Text style={{ color: colors.textMuted }} className="text-sm">
             {habits?.length || 0} {habits?.length === 1 ? 'habit' : 'habits'}
           </Text>
         </View>
 
-        {/* Habits Grid (web-like) */}
+        {/* Habits Grid (web-like) - Showing last 5 days */}
         {!showArchived && habits && habits.length > 0 && entries && (
           <HabitGridMobile
             habits={habits}
             entries={entries}
-            days={monthDays}
+            days={last5Days}
             onToggle={(habitId, date, completed) => {
-              const toggleKey = `${habitId}-${date}`;
-
-              // Prevent double-tap
-              if (pendingToggles.current.has(toggleKey)) {
-                return;
-              }
-
               // Haptic feedback
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
-
-              // Mark as pending
-              pendingToggles.current.add(toggleKey);
 
               // Use mutation with optimistic update
               toggleEntry.mutate(
                 { habitId, entryDate: date, completed },
                 {
-                  onSettled: () => {
-                    pendingToggles.current.delete(toggleKey);
-                  },
                   onError: (error) => {
                     console.error('Failed to toggle habit in grid:', error);
                     Alert.alert('Error', 'Failed to update habit. Please try again.');
@@ -489,7 +758,7 @@ export default function HabitsScreen() {
 
         {/* Habits List */}
         <View>
-          {showArchived && habits && habits.length > 0 ? (
+          {showArchived && habits && habits.length > 0 && (
             habits.map((habit: Habit) => {
               const todayEntry = getTodayEntry(habit.id);
               const isCompleted = todayEntry?.completed || false;
@@ -586,36 +855,75 @@ export default function HabitsScreen() {
                     )}
                   </Pressable>
 
-                  {/* Color indicator + Status */}
-                  <View className="flex-row items-center">
-                    {isCompleted && (
-                      <View className="mr-2 px-2 py-1 rounded-full" style={{ backgroundColor: colors.success + '20' }}>
-                        <Text style={{ color: colors.success }} className="text-xs font-medium">Done</Text>
-                      </View>
-                    )}
-                    <View
-                      className="w-2 h-8 rounded-full"
-                      style={{ backgroundColor: habit.color || colors.primary }}
-                    />
-                  </View>
+                  {/* Right side actions or status */}
+                  {showArchived ? (
+                    <View className="flex-row items-center space-x-3 ml-2">
+                      <Pressable 
+                        onPress={() => handleRestoreHabit(habit)}
+                        className="p-2 rounded-full bg-blue-500/10 active:bg-blue-500/20"
+                        style={{ marginRight: 8 }}
+                      >
+                        <Ionicons name="refresh" size={20} color="#3b82f6" />
+                      </Pressable>
+                      <Pressable 
+                        onPress={() => handleDeleteHabit(habit)}
+                        className="p-2 rounded-full bg-red-500/10 active:bg-red-500/20"
+                      >
+                        <Ionicons name="trash" size={20} color="#ef4444" />
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <View className="flex-row items-center">
+                      {isCompleted && (
+                        <View className="mr-2 px-2 py-1 rounded-full" style={{ backgroundColor: colors.success + '20' }}>
+                          <Text style={{ color: colors.success }} className="text-xs font-medium">Done</Text>
+                        </View>
+                      )}
+                      <View
+                        className="w-2 h-8 rounded-full"
+                        style={{ backgroundColor: habit.color || colors.primary }}
+                      />
+                    </View>
+                  )}
                 </View>
               );
             })
-          ) : (
+          )}
+          
+          {showArchived && (
+            <View className="items-center mt-2 pb-8">
+              <Pressable
+                onPress={() => setShowArchived(false)}
+                className="flex-row items-center justify-center bg-zinc-800 px-6 py-4 rounded-xl w-full border border-zinc-700 active:bg-zinc-700 shadow-sm"
+              >
+                <Ionicons name="arrow-back" size={20} color={colors.text} />
+                <Text style={{ color: colors.text }} className="font-bold ml-2 text-base">Return to Main Habits</Text>
+              </Pressable>
+            </View>
+          )}
+          
+          {(!habits || habits.length === 0) && !showArchived && (
             <View className="items-center py-12">
-              <Ionicons name={showArchived ? "archive-outline" : "add-circle-outline"} size={48} color={colors.textMuted} />
+              <Ionicons name="add-circle-outline" size={48} color={colors.textMuted} />
               <Text style={{ color: colors.textMuted }} className="mt-3 text-center">
-                {showArchived ? 'No archived habits' : 'No habits yet'}
+                No habits yet
               </Text>
-              {!showArchived && (
-                <Pressable
-                  style={{ backgroundColor: colors.primary }}
-                  className="mt-4 px-6 py-3 rounded-xl"
-                  onPress={() => setIsModalOpen(true)}
-                >
-                  <Text className="text-white font-bold">Add Your First Habit</Text>
-                </Pressable>
-              )}
+              <Pressable
+                style={{ backgroundColor: colors.primary }}
+                className="mt-4 px-6 py-3 rounded-xl shadow-sm"
+                onPress={() => setIsModalOpen(true)}
+              >
+                <Text className="text-white font-bold">Add Your First Habit</Text>
+              </Pressable>
+            </View>
+          )}
+
+          {(!habits || habits.length === 0) && showArchived && (
+            <View className="items-center py-8">
+              <Ionicons name="archive-outline" size={48} color={colors.textMuted} />
+              <Text style={{ color: colors.textMuted }} className="mt-3 text-center">
+                No archived habits
+              </Text>
             </View>
           )}
         </View>
@@ -631,7 +939,10 @@ export default function HabitsScreen() {
         transparent={true}
         onRequestClose={() => setIsModalOpen(false)}
       >
-        <View className="flex-1 justify-end bg-black/50">
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          className="flex-1 justify-end bg-black/50"
+        >
           <View className="bg-zinc-900 rounded-t-3xl p-6 border-t border-zinc-800 max-h-[90%]">
             {/* Modal Header */}
             <View className="flex-row items-center justify-between mb-4">
@@ -696,9 +1007,9 @@ export default function HabitsScreen() {
                     </Pressable>
 
                     {!isSignedIn && (
-                      <View className="bg-amber-500/20 rounded-xl p-3 mb-4 border border-amber-500/30">
-                        <Text className="text-amber-400 text-sm text-center">
-                          Sign in to use AI habit generation
+                      <View className="bg-indigo-500/10 rounded-xl p-3 mb-4 border border-indigo-500/20">
+                        <Text className="text-indigo-400 text-sm text-center">
+                          Offline Mode: Using local AI pattern matching
                         </Text>
                       </View>
                     )}
@@ -789,22 +1100,41 @@ export default function HabitsScreen() {
                   ))}
                 </ScrollView>
 
-                {/* Template List */}
+                {/* Template List with Save buttons */}
                 {HABIT_TEMPLATES
                   .filter(t => !selectedTemplateCategory || t.category === selectedTemplateCategory)
                   .map((template) => (
-                    <Pressable
+                    <View
                       key={template.id}
-                      onPress={() => handleSelectTemplate(template)}
                       className="bg-zinc-800 rounded-xl p-4 mb-3 flex-row items-center"
                     >
                       <Text className="text-2xl mr-3">{template.icon}</Text>
                       <View className="flex-1">
                         <Text className="text-white font-medium">{template.title}</Text>
-                        <Text className="text-zinc-500 text-xs mt-0.5">{template.category}</Text>
+                        <Text className="text-zinc-500 text-xs mt-0.5">{template.description}</Text>
+                        <View className="flex-row items-center mt-1">
+                          <View className="bg-zinc-700 px-2 py-0.5 rounded-full mr-2">
+                            <Text className="text-zinc-400 text-xs">{template.category}</Text>
+                          </View>
+                          {template.goalType !== 'binary' && (
+                            <Text className="text-zinc-500 text-xs">
+                              {template.goalTarget} {template.unit}
+                            </Text>
+                          )}
+                        </View>
                       </View>
-                      <View className="w-3 h-3 rounded-full" style={{ backgroundColor: template.color }} />
-                    </Pressable>
+                      <Pressable
+                        onPress={() => handleSelectTemplate(template)}
+                        disabled={createHabit.isPending}
+                        className="bg-amber-400 px-4 py-2 rounded-lg ml-2"
+                      >
+                        {createHabit.isPending ? (
+                          <ActivityIndicator color="#18181b" size="small" />
+                        ) : (
+                          <Text className="text-zinc-900 font-bold text-sm">Save</Text>
+                        )}
+                      </Pressable>
+                    </View>
                   ))}
 
                 <Pressable
@@ -947,7 +1277,7 @@ export default function HabitsScreen() {
               </ScrollView>
             )}
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );

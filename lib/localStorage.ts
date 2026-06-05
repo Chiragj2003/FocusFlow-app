@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Challenge, FocusSession, FocusStats, Habit, HabitEntry, InsightsSummary, StreakData, UserChallenge } from './api';
+import { challengesApi, entriesApi, focusSessionsApi, habitsApi, type Challenge, type FocusSession, type FocusStats, type Habit, type HabitEntry, type InsightsSummary, type StreakData, type UserChallenge } from './api';
 
 const STORAGE_KEYS = {
   HABITS: '@focusflow_habits',
@@ -69,6 +69,15 @@ export const localHabitsApi = {
     unit?: string;
   }): Promise<Habit> {
     const habits = await getAllHabits();
+
+    const titleNormalized = habit.title.trim().toLowerCase().replace(/\s+/g, ' ');
+    const isDuplicate = habits.some(
+      h => h.active && h.title.trim().toLowerCase().replace(/\s+/g, ' ') === titleNormalized
+    );
+    if (isDuplicate) {
+      throw new Error('A habit with this name already exists');
+    }
+
     const now = new Date().toISOString();
 
     const newHabit: Habit = {
@@ -380,7 +389,169 @@ export const localBadgesApi = {
 export const exportLocalData = async () => {
   const habits = await getAllHabits();
   const entries = await getAllEntries();
-  return { habits, entries };
+  const focusSessions = await getAllFocusSessions();
+  const userChallenges = await localChallengesApi.getUserChallenges();
+  return { habits, entries, focusSessions, userChallenges };
+};
+
+// Sync local storage offline-created data with backend when signed in
+export const syncLocalStorageWithBackend = async (): Promise<void> => {
+  try {
+    const habitsData = await AsyncStorage.getItem(STORAGE_KEYS.HABITS);
+    const entriesData = await AsyncStorage.getItem(STORAGE_KEYS.ENTRIES);
+    const focusSessionsData = await AsyncStorage.getItem(STORAGE_KEYS.FOCUS_SESSIONS);
+    const userChallengesData = await AsyncStorage.getItem(STORAGE_KEYS.USER_CHALLENGES);
+
+    const localHabits: Habit[] = habitsData ? JSON.parse(habitsData) : [];
+    const localEntries: HabitEntry[] = entriesData ? JSON.parse(entriesData) : [];
+    const localFocusSessions: FocusSession[] = focusSessionsData ? JSON.parse(focusSessionsData) : [];
+    const localUserChallenges: UserChallenge[] = userChallengesData ? JSON.parse(userChallengesData) : [];
+
+    // Filter only those that are truly local-only (ID starts with local_)
+    const habitsToSync = localHabits.filter(h => h.id.startsWith('local_'));
+    const entriesToSync = localEntries.filter(e => e.id.startsWith('local_'));
+    const focusSessionsToSync = localFocusSessions.filter(s => s.id.startsWith('local_'));
+    const userChallengesToSync = localUserChallenges.filter(c => c.id.startsWith('local_'));
+
+    if (
+      habitsToSync.length === 0 &&
+      entriesToSync.length === 0 &&
+      focusSessionsToSync.length === 0 &&
+      userChallengesToSync.length === 0
+    ) {
+      return; // Nothing to sync
+    }
+
+    console.log(`[Sync] Starting sync: ${habitsToSync.length} habits, ${entriesToSync.length} entries, ${focusSessionsToSync.length} focus sessions, ${userChallengesToSync.length} challenges`);
+
+    // Map to keep track of old local ID -> new DB ID mapping
+    const habitIdMap: Record<string, string> = {};
+
+    // 1. Sync habits
+    for (const localHabit of habitsToSync) {
+      try {
+        const created = await habitsApi.create({
+          title: localHabit.title,
+          description: localHabit.description || undefined,
+          color: localHabit.color,
+          category: localHabit.category || undefined,
+          goalType: localHabit.goalType,
+          goalTarget: localHabit.goalTarget || undefined,
+          unit: localHabit.unit || undefined,
+        });
+
+        // Store mapping
+        habitIdMap[localHabit.id] = created.id;
+
+        // If the habit was archived, archive it in backend too
+        if (!localHabit.active) {
+          await habitsApi.archive(created.id);
+        }
+
+        console.log(`[Sync] Synced habit "${localHabit.title}": ${localHabit.id} -> ${created.id}`);
+      } catch (error) {
+        console.error(`[Sync] Failed to sync habit "${localHabit.title}":`, error);
+      }
+    }
+
+    // 2. Sync entries
+    for (const localEntry of entriesToSync) {
+      try {
+        // Resolve habit ID if it was created locally
+        const resolvedHabitId = habitIdMap[localEntry.habitId] || localEntry.habitId;
+
+        // Skip if the habit was local-only but failed to sync
+        if (resolvedHabitId.startsWith('local_')) {
+          console.warn(`[Sync] Skipping entry sync for unresolved habit ID: ${resolvedHabitId}`);
+          continue;
+        }
+
+        await entriesApi.toggle(
+          resolvedHabitId,
+          localEntry.entryDate,
+          localEntry.completed,
+          localEntry.value || undefined,
+          localEntry.notes || undefined
+        );
+
+        console.log(`[Sync] Synced entry for habit ${resolvedHabitId} on ${localEntry.entryDate}`);
+      } catch (error) {
+        console.error(`[Sync] Failed to sync entry for habit ${localEntry.habitId}:`, error);
+      }
+    }
+
+    // 3. Sync focus sessions
+    const syncedFocusSessionIds = new Set<string>();
+    for (const localSession of focusSessionsToSync) {
+      try {
+        const resolvedHabitId = localSession.habitId ? (habitIdMap[localSession.habitId] || localSession.habitId) : undefined;
+        if (resolvedHabitId?.startsWith('local_')) {
+          console.warn(`[Sync] Skipping focus session for unresolved habit ID: ${resolvedHabitId}`);
+          continue;
+        }
+
+        await focusSessionsApi.create({
+          habitId: resolvedHabitId,
+          duration: localSession.duration,
+          notes: localSession.notes || undefined,
+          completedAt: localSession.completedAt,
+        });
+        syncedFocusSessionIds.add(localSession.id);
+        console.log(`[Sync] Synced focus session ${localSession.id}`);
+      } catch (error) {
+        console.error(`[Sync] Failed to sync focus session ${localSession.id}:`, error);
+      }
+    }
+
+    // 4. Sync joined challenges
+    const syncedUserChallengeIds = new Set<string>();
+    for (const localChallenge of userChallengesToSync) {
+      // Skip mock challenges from guest mode
+      if (!localChallenge.challengeId.includes('-')) {
+        syncedUserChallengeIds.add(localChallenge.id);
+        console.log(`[Sync] Skipped mock challenge ${localChallenge.challengeId}`);
+        continue;
+      }
+      
+      try {
+        await challengesApi.join(localChallenge.challengeId);
+        syncedUserChallengeIds.add(localChallenge.id);
+        console.log(`[Sync] Synced challenge ${localChallenge.challengeId}`);
+      } catch (error: any) {
+        if (error?.response?.status === 409) {
+          syncedUserChallengeIds.add(localChallenge.id);
+          console.log(`[Sync] Challenge ${localChallenge.challengeId} already exists in backend`);
+        } else {
+          console.error(`[Sync] Failed to sync challenge ${localChallenge.challengeId}:`, error);
+        }
+      }
+    }
+
+    // 5. Clean up local storage
+    const updatedHabits = localHabits.filter(h => !h.id.startsWith('local_') || habitIdMap[h.id]);
+    // Replace temporary IDs with real ones in the storage
+    const normalizedHabits = updatedHabits.map(h => {
+      if (h.id.startsWith('local_') && habitIdMap[h.id]) {
+        return { ...h, id: habitIdMap[h.id] };
+      }
+      return h;
+    });
+
+    // Remove synced entries
+    const remainingEntries = localEntries.filter(e => !e.id.startsWith('local_'));
+    const remainingFocusSessions = localFocusSessions.filter(s => !syncedFocusSessionIds.has(s.id));
+    const remainingUserChallenges = localUserChallenges.filter(c => !syncedUserChallengeIds.has(c.id));
+
+    await AsyncStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(normalizedHabits));
+    await AsyncStorage.setItem(STORAGE_KEYS.ENTRIES, JSON.stringify(remainingEntries));
+    await AsyncStorage.setItem(STORAGE_KEYS.FOCUS_SESSIONS, JSON.stringify(remainingFocusSessions));
+    await AsyncStorage.setItem(STORAGE_KEYS.USER_CHALLENGES, JSON.stringify(remainingUserChallenges));
+    await guestStorage.setGuestMode(false);
+
+    console.log('[Sync] Synchronization completed successfully!');
+  } catch (err) {
+    console.error('[Sync] Error during synchronization:', err);
+  }
 };
 
 // Helper functions for focus sessions

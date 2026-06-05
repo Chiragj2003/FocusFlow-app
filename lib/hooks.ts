@@ -1,6 +1,8 @@
 import { useAuth } from '@clerk/clerk-expo';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { notificationsManager } from './notifications';
 import { badgesApi, challengesApi, entriesApi, focusSessionsApi, habitsApi, insightsApi, type HabitEntry, type Habit } from './api';
 import {
   localBadgesApi,
@@ -47,13 +49,26 @@ export function useHabits(active?: boolean) {
         return localHabitsApi.getAll(active);
       }
 
-      // For signed-in users: Try API, but with fast timeout
+      // For signed-in users: Try API, but with fast fallback
       try {
         const apiData = await habitsApi.getAll(active);
-        // Save to local storage for next time (background)
+        // Cache to local storage, preserving unsynced local habits
+        try {
+          const localData = await AsyncStorage.getItem('@focusflow_habits');
+          const localHabits: Habit[] = localData ? JSON.parse(localData) : [];
+          const unsyncedHabits = localHabits.filter(h => h.id.startsWith('local_'));
+          
+          const apiIds = new Set(apiData.map(h => h.id));
+          const filteredUnsynced = unsyncedHabits.filter(h => !apiIds.has(h.id));
+          const mergedHabits = [...filteredUnsynced, ...apiData];
+          
+          await AsyncStorage.setItem('@focusflow_habits', JSON.stringify(mergedHabits));
+        } catch (storageErr) {
+          console.error('[Storage] Failed to cache habits:', storageErr);
+        }
         return apiData;
       } catch (error) {
-        console.warn('API failed, falling back to local:', error);
+        console.warn('API failed, falling back to local habits:', error);
         // Fallback to local storage on API error
         return localHabitsApi.getAll(active);
       }
@@ -78,9 +93,46 @@ export function useCreateHabit() {
       goalType: 'binary' | 'duration' | 'quantity';
       goalTarget?: number;
       unit?: string;
-    }) => isLocal ? localHabitsApi.create(habit) : habitsApi.create(habit),
+    }) => {
+      if (isLocal) {
+        return localHabitsApi.create(habit);
+      }
+      try {
+        return await habitsApi.create(habit);
+      } catch (apiError) {
+        console.warn('API create habit failed, fallback to local:', apiError);
+        return localHabitsApi.create(habit);
+      }
+    },
+    onMutate: async (newHabit) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.habits });
+      const previousHabits = queryClient.getQueriesData({ queryKey: queryKeys.habits });
+
+      queryClient.setQueriesData({ queryKey: queryKeys.habits }, (old: any) => {
+        if (!old || !Array.isArray(old)) return old;
+        const optimisticHabit = {
+          ...newHabit,
+          id: `optimistic-${Date.now()}`,
+          userId: 'user',
+          active: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        return [optimisticHabit, ...old];
+      });
+
+      return { previousHabits };
+    },
+    onError: (err, newHabit, context) => {
+      if (context?.previousHabits) {
+        context.previousHabits.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data);
+        });
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.habits });
+      notificationsManager.updateScheduledReminders();
     },
   });
 }
@@ -104,10 +156,38 @@ export function useUpdateHabit() {
   const isLocal = useIsLocalMode();
 
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof habitsApi.update>[1] }) =>
-      isLocal ? localHabitsApi.update(id, data) : habitsApi.update(id, data),
+    mutationFn: async ({ id, data }: { id: string; data: Parameters<typeof habitsApi.update>[1] }) => {
+      if (isLocal) {
+        return localHabitsApi.update(id, data);
+      }
+      try {
+        return await habitsApi.update(id, data);
+      } catch (apiError) {
+        console.warn('API update habit failed, fallback to local:', apiError);
+        return localHabitsApi.update(id, data);
+      }
+    },
+    onMutate: async ({ id, data }) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.habits });
+      const previousHabits = queryClient.getQueriesData({ queryKey: queryKeys.habits });
+
+      queryClient.setQueriesData({ queryKey: queryKeys.habits }, (old: any) => {
+        if (!old || !Array.isArray(old)) return old;
+        return old.map((h: any) => h.id === id ? { ...h, ...data, updatedAt: new Date().toISOString() } : h);
+      });
+
+      return { previousHabits };
+    },
+    onError: (err, variables, context) => {
+      if (context?.previousHabits) {
+        context.previousHabits.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data);
+        });
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.habits });
+      notificationsManager.updateScheduledReminders(3000);
     },
   });
 }
@@ -117,9 +197,42 @@ export function useDeleteHabit() {
   const isLocal = useIsLocalMode();
 
   return useMutation({
-    mutationFn: async (id: string) => isLocal ? localHabitsApi.delete(id) : habitsApi.delete(id),
-    onSuccess: () => {
+    mutationFn: async (id: string) => {
+      // Force local deletion so cache is immediately cleared
+      try { await localHabitsApi.delete(id); } catch (e) { }
+      
+      if (isLocal || id.startsWith('local_')) {
+        return id;
+      }
+      try {
+        await habitsApi.delete(id);
+        return id;
+      } catch (apiError: any) {
+        console.warn('API delete habit failed, fallback to local:', apiError.response?.data || apiError.message);
+        if (apiError.response) throw apiError; // Throw server errors so UI rolls back
+        return id;
+      }
+    },
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.habits });
+      const previousHabits = queryClient.getQueriesData({ queryKey: queryKeys.habits });
+      
+      queryClient.setQueriesData({ queryKey: queryKeys.habits }, (old: any) => {
+        if (!old || !Array.isArray(old)) return old;
+        return old.filter((h: any) => h.id !== id);
+      });
+      return { previousHabits };
+    },
+    onError: (err, id, context) => {
+      if (context?.previousHabits) {
+        context.previousHabits.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data);
+        });
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.habits });
+      notificationsManager.updateScheduledReminders(3000);
     },
   });
 }
@@ -129,9 +242,41 @@ export function useArchiveHabit() {
   const isLocal = useIsLocalMode();
 
   return useMutation({
-    mutationFn: async (id: string) => isLocal ? localHabitsApi.archive(id) : habitsApi.archive(id),
-    onSuccess: () => {
+    mutationFn: async (id: string) => {
+      try { await localHabitsApi.archive(id); } catch (e) { }
+      
+      if (isLocal || id.startsWith('local_')) {
+        return id;
+      }
+      try {
+        await habitsApi.archive(id);
+        return id;
+      } catch (apiError: any) {
+        console.warn('API archive habit failed, fallback to local:', apiError.response?.data || apiError.message);
+        if (apiError.response) throw apiError;
+        return id;
+      }
+    },
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.habits });
+      const previousHabits = queryClient.getQueriesData({ queryKey: queryKeys.habits });
+      
+      queryClient.setQueriesData({ queryKey: queryKeys.habits }, (old: any) => {
+        if (!old || !Array.isArray(old)) return old;
+        return old.map((h: any) => h.id === id ? { ...h, active: false } : h);
+      });
+      return { previousHabits };
+    },
+    onError: (err, id, context) => {
+      if (context?.previousHabits) {
+        context.previousHabits.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data);
+        });
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.habits });
+      notificationsManager.updateScheduledReminders(3000);
     },
   });
 }
@@ -141,9 +286,41 @@ export function useRestoreHabit() {
   const isLocal = useIsLocalMode();
 
   return useMutation({
-    mutationFn: async (id: string) => isLocal ? localHabitsApi.restore(id) : habitsApi.restore(id),
-    onSuccess: () => {
+    mutationFn: async (id: string) => {
+      try { await localHabitsApi.restore(id); } catch (e) { }
+      
+      if (isLocal || id.startsWith('local_')) {
+        return id;
+      }
+      try {
+        await habitsApi.restore(id);
+        return id;
+      } catch (apiError: any) {
+        console.warn('API restore habit failed, fallback to local:', apiError.response?.data || apiError.message);
+        if (apiError.response) throw apiError;
+        return id;
+      }
+    },
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.habits });
+      const previousHabits = queryClient.getQueriesData({ queryKey: queryKeys.habits });
+      
+      queryClient.setQueriesData({ queryKey: queryKeys.habits }, (old: any) => {
+        if (!old || !Array.isArray(old)) return old;
+        return old.map((h: any) => h.id === id ? { ...h, active: true } : h);
+      });
+      return { previousHabits };
+    },
+    onError: (err, id, context) => {
+      if (context?.previousHabits) {
+        context.previousHabits.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data);
+        });
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.habits });
+      notificationsManager.updateScheduledReminders();
     },
   });
 }
@@ -167,10 +344,27 @@ export function useEntries(startDate: string, endDate: string) {
       try {
         const data = await entriesApi.getByDateRange(startDate, endDate);
         // Normalize dates from API (remove time component)
-        return data.map(e => ({
+        const mappedData = data.map(e => ({
           ...e,
           entryDate: typeof e.entryDate === 'string' ? e.entryDate.split('T')[0] : formatDate(e.entryDate)
         }));
+
+        // Cache to local storage, preserving unsynced local entries
+        try {
+          const localData = await AsyncStorage.getItem('@focusflow_entries');
+          const localEntries: HabitEntry[] = localData ? JSON.parse(localData) : [];
+          const unsyncedEntries = localEntries.filter(e => e.id.startsWith('local_'));
+          
+          const fetchedIds = new Set(mappedData.map(e => `${e.habitId}-${e.entryDate}`));
+          const filteredUnsynced = unsyncedEntries.filter(e => !fetchedIds.has(`${e.habitId}-${e.entryDate}`));
+          const mergedEntries = [...filteredUnsynced, ...mappedData];
+          
+          await AsyncStorage.setItem('@focusflow_entries', JSON.stringify(mergedEntries));
+        } catch (storageErr) {
+          console.error('[Storage] Failed to cache entries:', storageErr);
+        }
+
+        return mappedData;
       } catch (error) {
         console.warn('API failed for entries, falling back to local:', error);
         return localEntriesApi.getByDateRange(startDate, endDate);
@@ -298,6 +492,7 @@ export function useToggleEntry() {
       // Only invalidate related queries
       queryClient.invalidateQueries({ queryKey: queryKeys.insights });
       queryClient.invalidateQueries({ queryKey: queryKeys.streaks });
+      notificationsManager.updateScheduledReminders(3000);
     },
   });
 }
@@ -416,8 +611,17 @@ export function useCreateFocusSession() {
   const isLocal = useIsLocalMode();
 
   return useMutation({
-    mutationFn: (data: { habitId?: string; duration: number; notes?: string }) =>
-      isLocal ? localFocusSessionsApi.create(data) : focusSessionsApi.create(data),
+    mutationFn: async (data: { habitId?: string; duration: number; notes?: string }) => {
+      if (isLocal) {
+        return localFocusSessionsApi.create(data);
+      }
+      try {
+        return await focusSessionsApi.create(data);
+      } catch (apiError) {
+        console.warn('API create focus session failed, fallback to local:', apiError);
+        return localFocusSessionsApi.create(data);
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.focusSessions });
       queryClient.invalidateQueries({ queryKey: queryKeys.focusStats });
@@ -473,8 +677,17 @@ export function useJoinChallenge() {
   const isLocal = useIsLocalMode();
 
   return useMutation({
-    mutationFn: (challengeId: string) =>
-      isLocal ? localChallengesApi.join(challengeId) : challengesApi.join(challengeId),
+    mutationFn: async (challengeId: string) => {
+      if (isLocal) {
+        return localChallengesApi.join(challengeId);
+      }
+      try {
+        return await challengesApi.join(challengeId);
+      } catch (apiError) {
+        console.warn('API join challenge failed, fallback to local:', apiError);
+        return localChallengesApi.join(challengeId);
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.challenges });
     },
