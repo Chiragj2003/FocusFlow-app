@@ -163,7 +163,7 @@ export default function CalendarScreen() {
   };
 
   const getCompletionColor = (rate: number) => {
-    if (rate === 0) return colors.backgroundSecondary;
+    if (rate === 0) return 'transparent';
     if (rate < 0.33) return colors.error + '40';
     if (rate < 0.66) return colors.warning + '60';
     if (rate < 1) return colors.primary + '60';
@@ -175,41 +175,34 @@ export default function CalendarScreen() {
       <StatusBar style={isDark ? 'light' : 'dark'} />
       
       {/* Header with Gradient */}
-      <LinearGradient
-        colors={isDark ? ['#1e293b', '#334155'] : ['#f8fafc', '#e2e8f0']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        className="px-6 pt-4 pb-4 mx-4 mt-2 rounded-2xl"
-      >
+      {/* Minimalist Header */}
+      <View className="px-6 pt-4 pb-2 mt-2">
         <View className="flex-row items-center justify-between mb-4">
           <Text style={{ color: colors.text }} className="text-3xl font-bold">Calendar</Text>
           <Pressable 
             onPress={goToToday}
+            className="px-4 py-1.5 rounded-full"
+            style={{ backgroundColor: colors.primary + '20' }}
           >
-            <LinearGradient
-              colors={['#3b82f6', '#2563eb']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              className="px-5 py-2 rounded-full"
-            >
-              <Text className="text-white font-bold">Today</Text>
-            </LinearGradient>
+            <Text style={{ color: colors.primary }} className="font-bold">Today</Text>
           </Pressable>
         </View>
         
         {/* Month Navigation */}
         <View className="flex-row items-center justify-between">
-          <Pressable onPress={goToPreviousMonth} className="p-2">
-            <Ionicons name="chevron-back" size={28} color={colors.text} />
-          </Pressable>
-          <Text style={{ color: colors.text }} className="text-xl font-bold">
+          <Text style={{ color: colors.text }} className="text-2xl font-bold">
             {MONTHS[month]} {year}
           </Text>
-          <Pressable onPress={goToNextMonth} className="p-2">
-            <Ionicons name="chevron-forward" size={28} color={colors.text} />
-          </Pressable>
+          <View className="flex-row items-center bg-gray-500/10 rounded-full px-2 py-1">
+            <Pressable onPress={goToPreviousMonth} className="p-1 mr-2">
+              <Ionicons name="chevron-back" size={24} color={colors.text} />
+            </Pressable>
+            <Pressable onPress={goToNextMonth} className="p-1 ml-2">
+              <Ionicons name="chevron-forward" size={24} color={colors.text} />
+            </Pressable>
+          </View>
         </View>
-      </LinearGradient>
+      </View>
 
       <ScrollView
         className="flex-1"
@@ -238,32 +231,31 @@ export default function CalendarScreen() {
               {calendarDays.map((day, index) => {
                 const completion = dayCompletions[day.date];
                 const isSelected = selectedDate === day.date;
+                const hasCompletion = completion && completion.completed > 0;
                 
                 return (
                   <Pressable
                     key={index}
                     onPress={() => setSelectedDate(day.date)}
-                    className={`w-[14.28%] aspect-square items-center justify-center p-1`}
+                    className={`w-[14.28%] aspect-square p-1`}
                   >
                     <View 
-                      className={`w-full h-full rounded-lg items-center justify-center`}
+                      className={`w-full h-full rounded-full items-center justify-center`}
                       style={{ 
-                        backgroundColor: completion ? getCompletionColor(completion.rate) : colors.backgroundSecondary,
-                        borderWidth: isSelected ? 2 : day.isToday ? 1 : 0,
-                        borderColor: isSelected ? colors.text : day.isToday ? colors.primary : 'transparent'
+                        backgroundColor: hasCompletion ? getCompletionColor(completion.rate) : 'transparent',
+                        borderWidth: isSelected ? 2 : (day.isToday ? 1 : 0),
+                        borderColor: isSelected ? colors.primary : (day.isToday ? colors.textMuted : 'transparent')
                       }}
                     >
                       <Text 
-                        style={{ color: day.isCurrentMonth ? colors.text : colors.textMuted }}
-                        className="text-sm font-medium"
+                        style={{ 
+                          color: isSelected ? colors.primary : (day.isCurrentMonth ? colors.text : colors.textMuted),
+                          fontWeight: isSelected || day.isToday ? 'bold' : 'normal'
+                        }}
+                        className="text-base"
                       >
                         {new Date(day.date).getDate()}
                       </Text>
-                      {completion && completion.completed > 0 && (
-                        <Text style={{ color: colors.textMuted }} className="text-xs">
-                          {completion.completed}/{completion.total}
-                        </Text>
-                      )}
                     </View>
                   </Pressable>
                 );
@@ -336,23 +328,23 @@ export default function CalendarScreen() {
           <Text style={{ color: colors.textMuted }} className="text-sm mb-2">Completion Rate</Text>
           <View className="flex-row gap-2">
             <View className="flex-row items-center">
-              <View style={{ backgroundColor: colors.backgroundSecondary }} className="w-4 h-4 rounded mr-1" />
+              <View style={{ borderWidth: 1, borderColor: colors.textMuted }} className="w-4 h-4 rounded-full mr-1" />
               <Text style={{ color: colors.textMuted }} className="text-xs">0%</Text>
             </View>
             <View className="flex-row items-center">
-              <View style={{ backgroundColor: colors.error + '40' }} className="w-4 h-4 rounded mr-1" />
+              <View style={{ backgroundColor: colors.error + '40' }} className="w-4 h-4 rounded-full mr-1" />
               <Text style={{ color: colors.textMuted }} className="text-xs">1-33%</Text>
             </View>
             <View className="flex-row items-center">
-              <View style={{ backgroundColor: colors.warning + '60' }} className="w-4 h-4 rounded mr-1" />
+              <View style={{ backgroundColor: colors.warning + '60' }} className="w-4 h-4 rounded-full mr-1" />
               <Text style={{ color: colors.textMuted }} className="text-xs">34-66%</Text>
             </View>
             <View className="flex-row items-center">
-              <View style={{ backgroundColor: colors.primary + '60' }} className="w-4 h-4 rounded mr-1" />
+              <View style={{ backgroundColor: colors.primary + '60' }} className="w-4 h-4 rounded-full mr-1" />
               <Text style={{ color: colors.textMuted }} className="text-xs">67-99%</Text>
             </View>
             <View className="flex-row items-center">
-              <View style={{ backgroundColor: colors.success + '60' }} className="w-4 h-4 rounded mr-1" />
+              <View style={{ backgroundColor: colors.success + '60' }} className="w-4 h-4 rounded-full mr-1" />
               <Text style={{ color: colors.textMuted }} className="text-xs">100%</Text>
             </View>
           </View>

@@ -59,7 +59,7 @@ DayCell.displayName = 'DayCell';
 const HabitRow = memo(({
   habit,
   days,
-  entriesMap,
+  completionsString,
   colors,
   onToggle,
   onArchive,
@@ -67,7 +67,7 @@ const HabitRow = memo(({
 }: {
   habit: Habit;
   days: string[];
-  entriesMap: Map<string, HabitEntry>;
+  completionsString: string;
   colors: any;
   onToggle: (habitId: string, date: string, completed: boolean) => void;
   onArchive?: (habitId: string) => void;
@@ -81,12 +81,12 @@ const HabitRow = memo(({
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Archive',
-          onPress: () => onArchive?.(habit.id),
+          onPress: () => setTimeout(() => onArchive?.(habit.id), 400),
           style: 'default'
         },
         {
           text: 'Delete',
-          onPress: () => onDelete?.(habit.id),
+          onPress: () => setTimeout(() => onDelete?.(habit.id), 400),
           style: 'destructive'
         }
       ]
@@ -94,34 +94,34 @@ const HabitRow = memo(({
   }, [habit, onArchive, onDelete]);
 
   return (
-    <View className="mb-4">
-      <View className="flex-row items-center justify-between mb-2 px-1">
-        <Pressable
-          onLongPress={handleLongPress}
-          className="flex-row items-center flex-1 mr-4"
-        >
+    <View className="flex-row items-center mb-3">
+      {/* Habit Title Column */}
+      <Pressable
+        onLongPress={handleLongPress}
+        onPress={handleLongPress}
+        className="flex-row items-center justify-between flex-1 mr-2"
+        style={{ minWidth: 100 }}
+      >
+        <View className="flex-row items-center flex-1 mr-1">
           <View
-            className="w-3 h-3 rounded-full mr-2"
+            className="w-2.5 h-2.5 rounded-full mr-2 shrink-0"
             style={{ backgroundColor: habit.color || colors.primary }}
           />
           <Text
-            className="font-medium text-sm text-zinc-200"
-            numberOfLines={1}
+            style={{ color: '#e4e4e7' }}
+            className="font-medium text-[13px] flex-1"
+            numberOfLines={2}
           >
             {habit.title}
           </Text>
-        </Pressable>
+        </View>
+        <Ionicons name="ellipsis-horizontal" size={12} color="#71717a" className="shrink-0" />
+      </Pressable>
 
-        <Pressable onPress={handleLongPress} hitSlop={10}>
-          <Ionicons name="ellipsis-horizontal" size={16} color="#71717a" />
-        </Pressable>
-      </View>
-
+      {/* Cells Column */}
       <View className="flex-row">
-        {days.map(date => {
-          const entryKey = `${habit.id}-${date}`;
-          const entry = entriesMap.get(entryKey);
-          const completed = !!entry?.completed;
+        {days.map((date, index) => {
+          const completed = completionsString[index] === '1';
           return (
             <DayCell
               key={date}
@@ -143,27 +143,35 @@ HabitRow.displayName = 'HabitRow';
 
 // Memoized header component
 const GridHeader = memo(({ days, colors }: { days: string[]; colors: any }) => {
+  const DAYS_SHORT = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
   return (
-    <View className="flex-row mb-3 pl-1">
-      {days.map(date => {
-        const d = new Date(date);
-        const dayNum = d.getDate();
-        const dayName = d.toLocaleDateString('en-US', { weekday: 'narrow' });
-        const isToday = new Date().toDateString() === d.toDateString();
+    <View className="flex-row mb-3 pl-1 w-full">
+      {/* Spacer to align with Habit Title Column */}
+      <View className="flex-1 justify-center mr-2" style={{ minWidth: 100 }}>
+        <Text style={{ fontSize: 9, color: '#71717a', fontWeight: 'bold', letterSpacing: 1 }}>HABITS</Text>
+      </View>
 
-        return (
-          <View key={date} style={{ width: 32, marginHorizontal: 2, alignItems: 'center' }}>
-            <Text style={{ fontSize: 10, color: '#71717a', marginBottom: 2 }}>{dayName}</Text>
-            <Text style={{
-              fontSize: 12,
-              fontWeight: isToday ? 'bold' : 'normal',
-              color: isToday ? colors.primary : '#a1a1aa'
-            }}>
-              {dayNum}
-            </Text>
-          </View>
-        );
-      })}
+      <View className="flex-row">
+        {days.map(date => {
+          const d = new Date(date);
+          const dayNum = d.getDate();
+          const dayName = DAYS_SHORT[d.getDay()];
+          const isToday = new Date().toDateString() === d.toDateString();
+
+          return (
+            <View key={date} style={{ width: 32, marginHorizontal: 2, alignItems: 'center' }}>
+              <Text style={{ fontSize: 10, color: '#71717a', marginBottom: 2 }}>{dayName}</Text>
+              <Text style={{
+                fontSize: 12,
+                fontWeight: isToday ? 'bold' : 'normal',
+                color: isToday ? colors.primary : '#a1a1aa'
+              }}>
+                {dayNum}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
     </View>
   );
 });
@@ -198,22 +206,29 @@ export const HabitGridMobile: React.FC<HabitGridMobileProps> = memo(({
       horizontal
       showsHorizontalScrollIndicator={false}
       className="bg-zinc-900/30 border border-zinc-800/50 rounded-xl p-4"
-      contentContainerStyle={{ paddingRight: 16 }}
+      contentContainerStyle={{ flexGrow: 1 }}
     >
-      <View>
+      <View className="flex-1 w-full">
         <GridHeader days={days} colors={colors} />
-        {habits.map(habit => (
-          <HabitRow
-            key={habit.id}
-            habit={habit}
-            days={days}
-            entriesMap={entriesMap}
-            colors={colors}
-            onToggle={stableOnToggle}
-            onArchive={onArchive}
-            onDelete={onDelete}
-          />
-        ))}
+        {habits.map(habit => {
+          const completionsString = days.map(date => {
+            const entry = entriesMap.get(`${habit.id}-${date}`);
+            return entry?.completed ? '1' : '0';
+          }).join('');
+
+          return (
+            <HabitRow
+              key={habit.id}
+              habit={habit}
+              days={days}
+              completionsString={completionsString}
+              colors={colors}
+              onToggle={stableOnToggle}
+              onArchive={onArchive}
+              onDelete={onDelete}
+            />
+          );
+        })}
         {/* Weekly stats footer can go here if needed, but we have summary cards now */}
       </View>
     </ScrollView>

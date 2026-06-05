@@ -1,13 +1,15 @@
-﻿import { useTheme } from '@/lib/ThemeContext';
+import { useTheme } from '@/lib/ThemeContext';
 import { useAuth, useUser } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Alert, Linking, Pressable, ScrollView, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { notificationsManager } from '@/lib/notifications';
 import { useHabits, useInsights, useStreaks } from '../../lib/hooks';
 import { guestStorage } from '../../lib/localStorage';
 
@@ -22,6 +24,54 @@ export default function SettingsScreen() {
   const [notifications, setNotifications] = useState(true);
   const [dailyReminder, setDailyReminder] = useState(true);
   const [hapticFeedback, setHapticFeedback] = useState(true);
+
+  // Load settings from AsyncStorage on mount
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const notifyVal = await AsyncStorage.getItem('@focusflow_settings_notifications');
+        const dailyVal = await AsyncStorage.getItem('@focusflow_settings_daily_reminder');
+        const hapticVal = await AsyncStorage.getItem('@focusflow_settings_haptic');
+
+        if (notifyVal !== null) setNotifications(notifyVal === 'true');
+        if (dailyVal !== null) setDailyReminder(dailyVal === 'true');
+        if (hapticVal !== null) setHapticFeedback(hapticVal === 'true');
+      } catch (error) {
+        console.error('Failed to load settings:', error);
+      }
+    };
+    loadSettings();
+  }, []);
+
+  const handleToggleNotifications = async (value: boolean) => {
+    setNotifications(value);
+    try {
+      await AsyncStorage.setItem('@focusflow_settings_notifications', String(value));
+      await notificationsManager.updateScheduledReminders();
+    } catch (error) {
+      console.error('Failed to save notification settings:', error);
+    }
+  };
+
+  const handleToggleDailyReminder = async (value: boolean) => {
+    setDailyReminder(value);
+    try {
+      await AsyncStorage.setItem('@focusflow_settings_daily_reminder', String(value));
+      await notificationsManager.updateScheduledReminders();
+    } catch (error) {
+      console.error('Failed to save daily reminder settings:', error);
+    }
+  };
+
+  const handleToggleHaptic = async (value: boolean) => {
+    setHapticFeedback(value);
+    try {
+      await AsyncStorage.setItem('@focusflow_settings_haptic', String(value));
+    } catch (error) {
+      console.error('Failed to save haptic settings:', error);
+    }
+  };
+
 
   // Fetch user stats
   const { data: habits = [] } = useHabits(true);
@@ -189,7 +239,7 @@ export default function SettingsScreen() {
               title="Push Notifications"
               subtitle="Receive habit reminders"
               value={notifications}
-              onToggle={setNotifications}
+              onToggle={handleToggleNotifications}
               isDark={isDark}
               colors={colors}
             />
@@ -199,7 +249,7 @@ export default function SettingsScreen() {
               title="Daily Reminder"
               subtitle="Get reminded to track habits"
               value={dailyReminder}
-              onToggle={setDailyReminder}
+              onToggle={handleToggleDailyReminder}
               isDark={isDark}
               colors={colors}
             />
@@ -260,7 +310,7 @@ export default function SettingsScreen() {
               title="Haptic Feedback"
               subtitle="Vibration on interactions"
               value={hapticFeedback}
-              onToggle={setHapticFeedback}
+              onToggle={handleToggleHaptic}
               isDark={isDark}
               colors={colors}
             />

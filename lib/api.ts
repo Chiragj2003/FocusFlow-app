@@ -1,4 +1,4 @@
-﻿import axios, { AxiosInstance } from 'axios';
+import axios, { AxiosInstance } from 'axios';
 
 // Configure your API base URL - connects to your deployed FocusFlow website
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://focus-flow-web-weld.vercel.app';
@@ -18,9 +18,10 @@ export const setAuthTokenGetter = (getter: () => Promise<string | null>) => {
 
 const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 5000, // 5 second timeout for faster failure detection
+  timeout: 5000, // 5 second timeout for fast offline fallback
   headers: {
     'Content-Type': 'application/json',
+    'Bypass-Tunnel-Reminder': 'true',
   },
 });
 
@@ -189,7 +190,20 @@ export const habitsApi = {
 
   // AI-powered habit generation
   generateWithAI: async (prompt: string) => {
-    const response = await api.post<{
+    const response = await api.post('/api/habits/ai-generate', { prompt });
+    const data = response.data;
+    
+    // The web API returns a single habit object, normalize to array format
+    if (data && !data.habits) {
+      // Single habit response - wrap in array
+      return {
+        habits: [data],
+        source: 'ai' as const,
+      };
+    }
+    
+    // Already in array format
+    return data as {
       habits: Array<{
         title: string;
         description: string;
@@ -200,8 +214,7 @@ export const habitsApi = {
         unit?: string;
       }>;
       source: 'ai' | 'fallback';
-    }>('/api/habits/ai-generate', { prompt });
-    return response.data;
+    };
   },
 
   update: async (id: string, data: Partial<{
@@ -297,6 +310,7 @@ export const focusSessionsApi = {
     habitId?: string;
     duration: number;
     notes?: string;
+    completedAt?: string;
   }) => {
     const response = await api.post<FocusSession>('/api/focus', session);
     return response.data;

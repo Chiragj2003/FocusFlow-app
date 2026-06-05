@@ -1,4 +1,4 @@
-﻿import { useTheme } from '@/lib/ThemeContext';
+import { useTheme } from '@/lib/ThemeContext';
 import { useHabits, useInsights, useStreaks } from '@/lib/hooks';
 import type { Habit, HabitStreak, TopHabit, WeeklyData as WeeklyDataType } from '@/lib/types';
 import { Ionicons } from '@expo/vector-icons';
@@ -48,7 +48,9 @@ export default function InsightsScreen() {
   }, [refetchInsights, refetchStreaks, refetchHabits]);
 
   // Calculate stats
-  const monthlyCompletion = insights ? Math.round(insights.overallCompletionRate * 100) : 0;
+  const monthlyCompletion = insights && typeof insights.overallCompletionRate === 'number' && !isNaN(insights.overallCompletionRate) 
+    ? Math.round(insights.overallCompletionRate * 100) 
+    : 0;
   const totalCompletions = insights?.totalCompleted || 0;
   const perfectDays = insights?.weekly?.filter((d: WeeklyDataType) => d.rate === 1).length || 0;
   const totalHabits = habits?.length || 0;
@@ -56,8 +58,8 @@ export default function InsightsScreen() {
   // Get weekly data for chart
   const weeklyData: WeeklyChartData[] = useMemo(() => {
     return insights?.weekly?.map((w: WeeklyDataType) => ({
-      day: w.day,
-      value: Math.round(w.rate * 100),
+      day: w.day || '',
+      value: typeof w.rate === 'number' && !isNaN(w.rate) ? Math.round(w.rate * 100) : 0,
     })) || [];
   }, [insights]);
 
@@ -110,13 +112,16 @@ export default function InsightsScreen() {
     let path = '';
     weeklyData.forEach((point: WeeklyChartData, index: number) => {
       const x = padding + index * stepX;
-      const y = graphHeight - (point.value / maxBarValue) * graphHeight + 20;
+      const pointVal = typeof point.value === 'number' && !isNaN(point.value) ? point.value : 0;
+      const maxVal = typeof maxBarValue === 'number' && !isNaN(maxBarValue) && maxBarValue > 0 ? maxBarValue : 100;
+      const y = graphHeight - (pointVal / maxVal) * graphHeight + 20;
       if (index === 0) {
         path += `M ${x} ${y}`;
       } else {
         const prevPoint = weeklyData[index - 1];
+        const prevPointVal = typeof prevPoint.value === 'number' && !isNaN(prevPoint.value) ? prevPoint.value : 0;
         const prevX = padding + (index - 1) * stepX;
-        const prevY = graphHeight - (prevPoint.value / maxBarValue) * graphHeight + 20;
+        const prevY = graphHeight - (prevPointVal / maxVal) * graphHeight + 20;
         const cpX = (prevX + x) / 2;
         path += ` C ${cpX} ${prevY}, ${cpX} ${y}, ${x} ${y}`;
       }
@@ -138,13 +143,16 @@ export default function InsightsScreen() {
     let path = `M ${padding} ${baseY}`;
     weeklyData.forEach((point: WeeklyChartData, index: number) => {
       const x = padding + index * stepX;
-      const y = graphHeight - (point.value / maxBarValue) * graphHeight + 20;
+      const pointVal = typeof point.value === 'number' && !isNaN(point.value) ? point.value : 0;
+      const maxVal = typeof maxBarValue === 'number' && !isNaN(maxBarValue) && maxBarValue > 0 ? maxBarValue : 100;
+      const y = graphHeight - (pointVal / maxVal) * graphHeight + 20;
       if (index === 0) {
         path += ` L ${x} ${y}`;
       } else {
         const prevPoint = weeklyData[index - 1];
+        const prevPointVal = typeof prevPoint.value === 'number' && !isNaN(prevPoint.value) ? prevPoint.value : 0;
         const prevX = padding + (index - 1) * stepX;
-        const prevY = graphHeight - (prevPoint.value / maxBarValue) * graphHeight + 20;
+        const prevY = graphHeight - (prevPointVal / maxVal) * graphHeight + 20;
         const cpX = (prevX + x) / 2;
         path += ` C ${cpX} ${prevY}, ${cpX} ${y}, ${x} ${y}`;
       }
@@ -415,7 +423,8 @@ export default function InsightsScreen() {
                     strokeLinecap="round"
                     strokeDasharray={`${2 * Math.PI * 48}`}
                     strokeDashoffset={`${2 * Math.PI * 48 * (1 - monthlyCompletion / 100)}`}
-                    transform="rotate(-90 56 56)"
+                    rotation={-90}
+                    origin="56, 56"
                   />
                 </Svg>
                 <View className="absolute inset-0 items-center justify-center">
@@ -447,7 +456,8 @@ export default function InsightsScreen() {
                     strokeLinecap="round"
                     strokeDasharray={`${2 * Math.PI * 48}`}
                     strokeDashoffset={`${2 * Math.PI * 48 * (1 - Math.min(totalHabits / 10, 1))}`}
-                    transform="rotate(-90 56 56)"
+                    rotation={-90}
+                    origin="56, 56"
                   />
                 </Svg>
                 <View className="absolute inset-0 items-center justify-center">

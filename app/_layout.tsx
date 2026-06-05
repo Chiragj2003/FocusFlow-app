@@ -77,13 +77,13 @@ export default function RootLayout() {
   return (
     <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
       <ClerkLoaded>
-        <AuthTokenProvider>
-          <QueryClientProvider client={queryClient}>
+        <QueryClientProvider client={queryClient}>
+          <AuthTokenProvider>
             <ThemeProvider>
               <RootLayoutNav />
             </ThemeProvider>
-          </QueryClientProvider>
-        </AuthTokenProvider>
+          </AuthTokenProvider>
+        </QueryClientProvider>
       </ClerkLoaded>
     </ClerkProvider>
   );
