@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ALL_ACHIEVEMENTS } from '@/lib/constants';
+import { useUserChallenges, useJoinChallenge } from '@/lib/hooks';
 
 function AchievementCard({ 
   achievement, 
