@@ -94,7 +94,7 @@ function AchievementCard({
                   {progress} / {achievement.target}
                 </Text>
               </View>
-              <View style={{ backgroundColor: isDark ? '#27272a' : '#e4e4e7' }} className="h-2.5 rounded-full overflow-hidden">
+              <View style={{ backgroundColor: colors.backgroundTertiary }} className="h-2.5 rounded-full overflow-hidden">
                 <LinearGradient
                   colors={isCompleted ? ['#10b981', '#059669'] : gradientColors as [string, string]}
                   start={{ x: 0, y: 0 }}
@@ -140,17 +140,17 @@ function AchievementCard({
                   onPress={onJoin}
                   disabled={isJoining}
                   className="overflow-hidden rounded-lg shadow-sm"
+                  style={{ backgroundColor: colors.primary }}
                 >
-                  <LinearGradient
-                    colors={isDark ? ['#3f3f46', '#27272a'] : ['#f4f4f5', '#e4e4e7']}
+                  <View
                     style={{ paddingHorizontal: 20, paddingVertical: 10, flexDirection: 'row', justifyContent: 'center', minWidth: 80 }}
                   >
                     {isJoining ? (
-                      <ActivityIndicator size="small" color={isDark ? "#fff" : "#18181b"} />
+                      <ActivityIndicator size="small" color={colors.primaryForeground} />
                     ) : (
-                      <Text style={{ color: isDark ? '#fff' : '#18181b' }} className="font-bold text-sm">Join</Text>
+                      <Text style={{ color: colors.primaryForeground }} className="font-bold text-sm">Join</Text>
                     )}
-                  </LinearGradient>
+                  </View>
                 </Pressable>
               ) : (
                 <View className="flex-row items-center bg-zinc-500/10 px-3 py-1.5 rounded-lg">
@@ -224,7 +224,7 @@ export default function AchievementsScreen() {
         >
           <Pressable 
             className={`flex-1 py-2.5 items-center rounded-lg ${activeTab === 'available' ? 'shadow-sm' : ''}`}
-            style={{ backgroundColor: activeTab === 'available' ? (isDark ? '#3f3f46' : '#fff') : 'transparent' }}
+            style={{ backgroundColor: activeTab === 'available' ? colors.backgroundSecondary : 'transparent' }}
             onPress={() => {
               setActiveTab('available');
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -239,7 +239,7 @@ export default function AchievementsScreen() {
           </Pressable>
           <Pressable 
             className={`flex-1 py-2.5 items-center rounded-lg ${activeTab === 'joined' ? 'shadow-sm' : ''}`}
-            style={{ backgroundColor: activeTab === 'joined' ? (isDark ? '#3f3f46' : '#fff') : 'transparent' }}
+            style={{ backgroundColor: activeTab === 'joined' ? colors.backgroundSecondary : 'transparent' }}
             onPress={() => {
               setActiveTab('joined');
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
