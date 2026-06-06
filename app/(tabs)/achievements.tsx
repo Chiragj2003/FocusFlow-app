@@ -280,7 +280,6 @@ export default function AchievementsScreen() {
                 <AchievementCard
                   key={achievement.id}
                   achievement={achievement}
-                  isJoined={false}
                   onJoin={() => handleJoin(achievement.id)}
                   isJoining={isJoiningId === achievement.id}
                 />
@@ -304,7 +303,6 @@ export default function AchievementsScreen() {
                     key={achievement.id}
                     achievement={achievement}
                     userChallenge={uc}
-                    isJoined={true}
                     onJoin={() => {}}
                     isJoining={false}
                   />

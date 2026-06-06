@@ -11,7 +11,7 @@ Notifications.setNotificationHandler({
   } as any),
 });
 
-let debounceTimeout: NodeJS.Timeout | null = null;
+let debounceTimeout: ReturnType<typeof setTimeout> | null = null;
 
 export const notificationsManager = {
   // Request user permissions for push notifications
