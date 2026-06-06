@@ -6,7 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useState, useEffect } from 'react';
-import { Alert, Linking, Pressable, ScrollView, Switch, Text, View } from 'react-native';
+import { Alert, Linking, Pressable, ScrollView, Switch, Text, View, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { notificationsManager } from '@/lib/notifications';
@@ -14,6 +14,7 @@ import { useHabits, useInsights, useStreaks } from '../../lib/hooks';
 import { guestStorage } from '../../lib/localStorage';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://focus-flow-web-weld.vercel.app';
+const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL || API_URL;
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -160,7 +161,7 @@ export default function SettingsScreen() {
       'Your habit data will be prepared for export. This feature opens the web app.',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Open Web App', onPress: () => Linking.openURL(`${API_URL}/settings`) }
+        { text: 'Open Web App', onPress: () => Linking.openURL(`${WEB_URL}/settings`) }
       ]
     );
   };
@@ -185,9 +186,13 @@ export default function SettingsScreen() {
           <View className="flex-row items-center">
             <View 
               style={{ backgroundColor: colors.backgroundSecondary }}
-              className="w-16 h-16 rounded-2xl items-center justify-center"
+              className="w-16 h-16 rounded-2xl items-center justify-center overflow-hidden"
             >
-              <Ionicons name="person" size={28} color={colors.textMuted} />
+              {user?.imageUrl ? (
+                <Image source={{ uri: user.imageUrl }} style={{ width: 64, height: 64, resizeMode: 'cover' }} />
+              ) : (
+                <Ionicons name="person" size={28} color={colors.textMuted} />
+              )}
             </View>
             <View className="ml-4 flex-1">
               <Text style={{ color: colors.text }} className="text-xl font-bold">{userName}</Text>
@@ -196,7 +201,7 @@ export default function SettingsScreen() {
             {isSignedIn ? (
               <Pressable
                 className="p-2"
-                onPress={() => Linking.openURL(`${API_URL}/settings`)}
+                onPress={() => Linking.openURL(`${WEB_URL}/settings`)}
               >
                 <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
               </Pressable>
@@ -212,23 +217,6 @@ export default function SettingsScreen() {
             )}
           </View>
 
-          {/* User Stats - Flat Zinc Cards */}
-          <View className="flex-row mt-5 pt-4 border-t border-zinc-800/50" style={{ borderColor: colors.border }}>
-            <View className="flex-1 items-center">
-              <Text style={{ color: colors.text }} className="text-2xl font-bold">{totalHabits}</Text>
-              <Text style={{ color: colors.textMuted }} className="text-xs uppercase tracking-wider mt-1">Habits</Text>
-            </View>
-            <View className="w-px mx-2" style={{ backgroundColor: colors.border }} />
-            <View className="flex-1 items-center">
-              <Text style={{ color: colors.text }} className="text-2xl font-bold">{currentStreak}</Text>
-              <Text style={{ color: colors.textMuted }} className="text-xs uppercase tracking-wider mt-1">Streak</Text>
-            </View>
-            <View className="w-px mx-2" style={{ backgroundColor: colors.border }} />
-            <View className="flex-1 items-center">
-              <Text style={{ color: colors.text }} className="text-2xl font-bold">{Math.round(completionRate)}%</Text>
-              <Text style={{ color: colors.textMuted }} className="text-xs uppercase tracking-wider mt-1">Done</Text>
-            </View>
-          </View>
         </View>
 
         {/* Notifications Section */}
@@ -335,7 +323,7 @@ export default function SettingsScreen() {
               icon="cloud-upload-outline"
               title="Sync with Web"
               subtitle="Open FocusFlow web app"
-              onPress={() => Linking.openURL(API_URL)}
+              onPress={() => Linking.openURL(WEB_URL)}
               isDark={isDark}
               colors={colors}
             />
@@ -350,7 +338,7 @@ export default function SettingsScreen() {
               icon="help-circle-outline"
               title="Help Center"
               subtitle="FAQs and guides"
-              onPress={() => Linking.openURL(`${API_URL}/help`)}
+              onPress={() => Linking.openURL(`${WEB_URL}/help`)}
               isDark={isDark}
               colors={colors}
             />
@@ -368,7 +356,7 @@ export default function SettingsScreen() {
               icon="globe-outline"
               title="Visit Website"
               subtitle="Open FocusFlow web"
-              onPress={() => Linking.openURL(API_URL)}
+              onPress={() => Linking.openURL(WEB_URL)}
               isDark={isDark}
               colors={colors}
             />
@@ -382,7 +370,7 @@ export default function SettingsScreen() {
             <SettingButton
               icon="document-text-outline"
               title="Privacy Policy"
-              onPress={() => Linking.openURL(`${API_URL}/privacy`)}
+              onPress={() => Linking.openURL(`${WEB_URL}/privacy`)}
               isDark={isDark}
               colors={colors}
             />
@@ -390,7 +378,7 @@ export default function SettingsScreen() {
             <SettingButton
               icon="shield-checkmark-outline"
               title="Terms of Service"
-              onPress={() => Linking.openURL(`${API_URL}/terms`)}
+              onPress={() => Linking.openURL(`${WEB_URL}/terms`)}
               isDark={isDark}
               colors={colors}
             />

@@ -80,11 +80,11 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="calendar"
+        name="focus"
         options={{
-          title: 'Calendar',
+          title: 'Focus',
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'calendar' : 'calendar-outline'} size={22} color={color} />
+            <Ionicons name={focused ? 'timer' : 'timer-outline'} size={22} color={color} />
           ),
         }}
       />
@@ -97,13 +97,7 @@ export default function TabLayout() {
           ),
         }}
       />
-      {/* Hidden screens - accessible from Dashboard */}
-      <Tabs.Screen
-        name="focus"
-        options={{
-          href: null,
-        }}
-      />
+
       <Tabs.Screen
         name="achievements"
         options={{
