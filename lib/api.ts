@@ -1,55 +1,116 @@
 import axios, { AxiosInstance } from 'axios';
+import NetInfo from '@react-native-community/netinfo';
 
 // Configure your API base URL - connects to your deployed FocusFlow website
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://focus-flow-web-weld.vercel.app';
 
 // Token getter function - will be set by the app when Clerk loads
-let getAuthToken: (() => Promise<string | null>) | null = null;
+let getAuthToken: ((options?: { skipCache?: boolean }) => Promise<string | null>) | null = null;
 // Cache token to avoid repeated async calls
 let cachedToken: string | null = null;
 let tokenExpiry: number = 0;
 
-export const setAuthTokenGetter = (getter: () => Promise<string | null>) => {
+export const setAuthTokenGetter = (getter: (options?: { skipCache?: boolean }) => Promise<string | null>) => {
   getAuthToken = getter;
   // Reset cache when getter changes
   cachedToken = null;
   tokenExpiry = 0;
 };
 
-const api: AxiosInstance = axios.create({
+export const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 5000, // 5 second timeout for fast offline fallback
+  timeout: 10000, // 10 second timeout
   headers: {
     'Content-Type': 'application/json',
     'Bypass-Tunnel-Reminder': 'true',
   },
 });
 
-// Add auth token to requests from Clerk
+// Request Interceptor: Handles offline checks, auth tokens, and request logging
 api.interceptors.request.use(async (config) => {
+  // 1. Fast fail if offline
+  const netInfo = await NetInfo.fetch();
+  if (netInfo.isConnected === false) {
+    return Promise.reject(new Error('Network Error: Offline. Please check your internet connection.'));
+  }
+
+  const hasGetter = !!getAuthToken;
+  let hasToken = false;
+
+  // 2. Attach Authorization header
   if (getAuthToken) {
-    // Use cached token if valid (cache for 4 minutes, tokens last 5 min)
     const now = Date.now();
     if (!cachedToken || now >= tokenExpiry) {
-      cachedToken = await getAuthToken();
-      tokenExpiry = now + 4 * 60 * 1000; // 4 minutes
+      try {
+        cachedToken = await getAuthToken();
+        tokenExpiry = now + 4 * 60 * 1000; // Cache for 4 minutes
+      } catch (err) {
+        console.error('[API Request] Failed to retrieve Clerk token:', err);
+      }
     }
     if (cachedToken) {
       config.headers.Authorization = `Bearer ${cachedToken}`;
+      hasToken = true;
     }
   }
+
+  // 3. Log request details
+  console.log(`[API Request] URL: ${config.url} | Method: ${config.method?.toUpperCase()} | AuthGetter: ${hasGetter} | TokenPresent: ${hasToken}`);
   return config;
 });
 
-// Response interceptor for error handling
+// Response Interceptor: Handles logging, 401 token refresh retries, and GET request retries
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log(`[API Response] URL: ${response.config.url} | Method: ${response.config.method?.toUpperCase()} | Status: ${response.status} | AuthStatus: Success`);
+    return response;
+  },
   async (error) => {
-    if (error.response?.status === 401) {
-      // Clear token cache on 401
+    const config = error.config;
+    const status = error.response?.status;
+    console.warn(`[API Error] URL: ${config?.url} | Method: ${config?.method?.toUpperCase()} | Status: ${status || 'Network/Timeout Error'} | Message: ${error.message} | AuthStatus: ${status === 401 ? 'Unauthorized' : 'Error'}`);
+
+    // Handle 401 Unauthorized errors - refresh token and retry immediately
+    if (status === 401 && config && !config._is401Retry) {
+      config._is401Retry = true;
+      cachedToken = null;
+      tokenExpiry = 0;
+
+      console.log(`[API] 401 Unauthorized detected for ${config.url}. Refreshing token and retrying...`);
+
+      if (getAuthToken) {
+        try {
+          const token = await getAuthToken({ skipCache: true });
+          if (token) {
+            cachedToken = token;
+            tokenExpiry = Date.now() + 4 * 60 * 1000;
+            config.headers.Authorization = `Bearer ${token}`;
+            console.log(`[API] Token refreshed. Retrying request to ${config.url} with new token.`);
+            return api(config);
+          }
+        } catch (refreshError) {
+          console.error(`[API] Token refresh failed during 401 retry:`, refreshError);
+        }
+      }
+    }
+
+    // Clear token cache on any 401 that wasn't successfully resolved
+    if (status === 401) {
       cachedToken = null;
       tokenExpiry = 0;
     }
+
+    // Fallback: Simple retry logic for failed GET requests (non-401 errors)
+    if (config && config.method && config.method.toLowerCase() === 'get' && status !== 401) {
+      config.__retryCount = config.__retryCount || 0;
+      if (config.__retryCount < 1) {
+        config.__retryCount += 1;
+        console.log(`[API Retry] Retrying GET request to ${config.url} (Attempt ${config.__retryCount})...`);
+        await new Promise((resolve) => setTimeout(resolve, 1000)); // 1s backoff
+        return api(config);
+      }
+    }
+
     return Promise.reject(error);
   }
 );
@@ -290,6 +351,10 @@ export const insightsApi = {
 export const badgesApi = {
   getAll: async () => {
     const response = await api.get<Badge[]>('/api/badges');
+    return response.data;
+  },
+  awardBadge: async (name: string, metadata?: Record<string, any>) => {
+    const response = await api.post<Badge>('/api/badges', { name, metadata });
     return response.data;
   },
 };

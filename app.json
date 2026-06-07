@@ -1,4 +1,4 @@
-﻿{
+{
   "expo": {
     "name": "FocusFlow",
     "slug": "focusflow-expo",
@@ -45,10 +45,10 @@
       "typedRoutes": true
     },
     "extra": {
+      "router": {},
       "eas": {
-        "projectId": "your-project-id"
+        "projectId": "4b92a2de-ebbd-4f67-8b00-a5b9f7e38910"
       }
-    },
-    "owner": "focusflow"
+    }
   }
 }

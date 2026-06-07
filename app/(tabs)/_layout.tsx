@@ -1,7 +1,7 @@
 import { useTheme } from '@/lib/ThemeContext';
 import { useAuth } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
-import { Tabs } from 'expo-router';
+import { Redirect, Tabs } from 'expo-router';
 import React from 'react';
 import { ActivityIndicator, Platform, View } from 'react-native';
 
@@ -19,10 +19,10 @@ export default function TabLayout() {
   }
 
   // Redirect to sign-in if not authenticated
-  // Comment this out to allow guest access
-  // if (!isSignedIn) {
-  //   return <Redirect href="/(auth)/sign-in" />;
-  // }
+  if (!isSignedIn) {
+    return <Redirect href="/(auth)/sign-in" />;
+  }
+
 
   return (
     <Tabs

@@ -117,7 +117,7 @@ export default function BadgesScreen() {
   const isBadgeUnlocked = (badgeId: string) => {
     if (!earnedBadges || !Array.isArray(earnedBadges)) return false;
     
-    // Map badge names to IDs
+    // Map badge names/legacy names to IDs
     const nameToId: Record<string, string> = {
       'First Habit': 'first_habit',
       '3 Day Streak': '3_day_streak',
@@ -126,6 +126,8 @@ export default function BadgesScreen() {
       '10 Completions': '10_completions',
       '50 Completions': '50_completions',
       'Century Club': 'century_club',
+      'Consistency King': 'week_warrior',
+      'Habit Master': 'century_club',
     };
     
     return earnedBadges.some((b: Badge) => {
@@ -145,6 +147,8 @@ export default function BadgesScreen() {
       '10 Completions': '10_completions',
       '50 Completions': '50_completions',
       'Century Club': 'century_club',
+      'Consistency King': 'week_warrior',
+      'Habit Master': 'century_club',
     };
     
     const badge = earnedBadges.find((b: Badge) => {
@@ -164,7 +168,7 @@ export default function BadgesScreen() {
   const progressPercent = Math.round((unlockedCount / totalCount) * 100);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.background }}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       
       {/* Header */}

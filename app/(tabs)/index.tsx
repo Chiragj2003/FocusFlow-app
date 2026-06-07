@@ -1,6 +1,6 @@
 import { useTheme } from '@/lib/ThemeContext';
 import type { Badge } from '@/lib/api';
-import { getCurrentMonthRange, getToday, useBadges, useEntries, useHabits, useInsights, useStreaks } from '@/lib/hooks';
+import { getCurrentMonthRange, getToday, useBadges, useEntries, useHabits, useInsights, useStreaks, useAwardBadge } from '@/lib/hooks';
 import { getDailyQuote, getStreakMessage } from '@/lib/quotes';
 import type { HabitEntry, TopHabit } from '@/lib/types';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,16 +9,24 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useMemo } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View, Image } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View, Image, Alert, Vibration } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-// Dummy locked badges for upcoming achievements
-const DUMMY_BADGES = [
-  { id: 'streak-7', name: 'Consistency King', description: 'Hit a 7-day streak', icon: 'flame', color: '#f97316' },
-  { id: 'focus-10', name: 'Deep Focus', description: '10 hours of focus time', icon: 'time', color: '#3b82f6' },
-  { id: 'master-100', name: 'Habit Master', description: 'Complete 100 entries', icon: 'star', color: '#a855f7' },
-  { id: 'early-bird', name: 'Early Bird', description: 'Complete habit before 6 AM', icon: 'partly-sunny', color: '#eab308' },
-  { id: 'weekend', name: 'Weekend Warrior', description: 'Weekend completions', icon: 'calendar', color: '#10b981' },
+// Available milestones to unlock - aligned with ALL_BADGES from lib/constants.ts
+const AVAILABLE_BADGES = [
+  { id: 'first_habit', name: 'First Habit', description: 'Create your first habit', check: (streaks: any, insights: any, habits: any) => (habits?.length || 0) >= 1 },
+  { id: 'first_completion', name: 'First Step', description: 'Complete your first habit entry', check: (streaks: any, insights: any) => (insights?.totalCompleted || 0) >= 1 },
+  { id: '3_day_streak', name: '3 Day Streak', description: 'Maintain a 3-day streak', check: (streaks: any) => (streaks?.longestStreak || 0) >= 3 },
+  { id: 'week_warrior', name: 'Week Warrior', description: 'Maintain a 7-day streak', check: (streaks: any) => (streaks?.longestStreak || 0) >= 7 },
+  { id: '10_day_streak', name: 'Double Digits', description: 'Maintain a 10-day streak', check: (streaks: any) => (streaks?.longestStreak || 0) >= 10 },
+  { id: 'two_week_titan', name: 'Two Week Titan', description: 'Maintain a 14-day streak', check: (streaks: any) => (streaks?.longestStreak || 0) >= 14 },
+  { id: '21_day_streak', name: 'Habit Former', description: 'Maintain a 21-day streak', check: (streaks: any) => (streaks?.longestStreak || 0) >= 21 },
+  { id: 'monthly_master', name: 'Monthly Master', description: 'Maintain a 30-day streak', check: (streaks: any) => (streaks?.longestStreak || 0) >= 30 },
+  { id: '10_completions', name: '10 Completions', description: 'Complete 10 habit entries', check: (streaks: any, insights: any) => (insights?.totalCompleted || 0) >= 10 },
+  { id: '25_completions', name: '25 Completions', description: 'Complete 25 habit entries', check: (streaks: any, insights: any) => (insights?.totalCompleted || 0) >= 25 },
+  { id: '50_completions', name: 'Half Century', description: 'Complete 50 habit entries', check: (streaks: any, insights: any) => (insights?.totalCompleted || 0) >= 50 },
+  { id: 'century_club', name: 'Century Club', description: 'Complete 100 habit entries', check: (streaks: any, insights: any) => (insights?.totalCompleted || 0) >= 100 },
+  { id: 'all_habits_completed', name: 'Flawless Day', description: 'Complete all daily habits', check: (streaks: any, insights: any, habits: any, todayCompleted: number, todayTotal: number) => todayTotal > 0 && todayCompleted === todayTotal },
 ];
 
 export default function DashboardScreen() {
@@ -33,25 +41,61 @@ export default function DashboardScreen() {
   const { data: insights, isLoading: insightsLoading, refetch: refetchInsights } = useInsights();
   const { data: streaks, isLoading: streaksLoading, refetch: refetchStreaks } = useStreaks();
   const { data: badges, refetch: refetchBadges } = useBadges();
+  const awardBadgeMutation = useAwardBadge();
   const { data: entries, refetch: refetchEntries } = useEntries(today, today);
+  const processingBadges = React.useRef(new Set<string>());
 
   const [refreshing, setRefreshing] = React.useState(false);
 
   const isLoading = habitsLoading || insightsLoading || streaksLoading;
 
-  // Calculate today's completion
-  const todayEntries = entries?.filter((e: HabitEntry) => e.entryDate === today && e.completed) || [];
-  const todayCompleted = todayEntries.length;
-  const todayTotal = habits?.length || 0;
-  const completionPercentage = todayTotal > 0 ? Math.round((todayCompleted / todayTotal) * 100) : 0;
+  // Calculate today's completion (cap correctly to avoid >100% or '6 of 4')
+  const activeHabits = habits?.filter(h => h.active !== false) || [];
+  const todayTotal = activeHabits.length;
+  
+  const activeHabitIds = new Set(activeHabits.map(h => h.id));
+  const todayEntries = entries?.filter((e: HabitEntry) => e.entryDate === today && e.completed && activeHabitIds.has(e.habitId)) || [];
+  const uniqueCompletedHabits = new Set(todayEntries.map((e: HabitEntry) => e.habitId));
+  
+  const todayCompleted = Math.min(uniqueCompletedHabits.size, todayTotal);
+  const completionPercentage = todayTotal > 0 ? Math.min(Math.round((todayCompleted / todayTotal) * 100), 100) : 0;
+
+  // Evaluate badge unlocks
+  React.useEffect(() => {
+    if (!badges || !streaks || !insights) return;
+    // Don't evaluate badges if there are no habits
+    if (!habits || habits.length === 0) return;
+    
+    const collectedNames = new Set(badges.map(b => b.name));
+    
+    AVAILABLE_BADGES.forEach(badge => {
+      // Check if already earned by ID or legacy name mapping
+      const alreadyEarned = collectedNames.has(badge.id) || collectedNames.has(badge.name);
+      
+      if (!alreadyEarned && !processingBadges.current.has(badge.id) && badge.check(streaks, insights, habits, todayCompleted, todayTotal)) {
+        processingBadges.current.add(badge.id);
+        awardBadgeMutation.mutate({ name: badge.id, metadata: { displayName: badge.name, description: badge.description } }, {
+          onSuccess: () => {
+            Vibration.vibrate(500);
+            Alert.alert("🎉 Badge Unlocked!", `You earned: ${badge.name}\n${badge.description}`);
+            refetchBadges();
+          },
+          onError: () => {
+            // Remove from processing set if it failed, so it can be retried later
+            processingBadges.current.delete(badge.id);
+          }
+        });
+      }
+    });
+  }, [streaks, insights, badges, habits, todayCompleted, todayTotal]);
 
   // Get streak data
-  const currentStreak = streaks?.currentStreak || 0;
-  const bestStreak = streaks?.longestStreak || 0;
+  const currentStreak = todayTotal > 0 ? (streaks?.currentStreak || 0) : 0;
+  const bestStreak = todayTotal > 0 ? (streaks?.longestStreak || 0) : 0;
 
   // Get completion rate from insights
-  const weeklyRate = insights ? Math.round(insights.overallCompletionRate * 100) : 0;
-  const totalCompleted = insights?.totalCompleted || 0;
+  const weeklyRate = todayTotal > 0 && insights ? Math.round(insights.overallCompletionRate * 100) : 0;
+  const totalCompleted = todayTotal > 0 ? (insights?.totalCompleted || 0) : 0;
 
   // Get daily quote
   const quote = getDailyQuote();
@@ -75,9 +119,7 @@ export default function DashboardScreen() {
   }, []);
 
   // Clean username fallback
-  const userName = isSignedIn
-    ? (user?.firstName || user?.emailAddresses?.[0]?.emailAddress?.split('@')[0] || 'Champion')
-    : 'Guest';
+  const userName = user?.firstName || user?.emailAddresses?.[0]?.emailAddress?.split('@')[0] || 'Champion';
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -93,7 +135,7 @@ export default function DashboardScreen() {
 
   if (isLoading && !refreshing) {
     return (
-      <SafeAreaView style={{ backgroundColor: colors.background }} className="flex-1 items-center justify-center">
+      <SafeAreaView edges={['top']} style={{ backgroundColor: colors.background }} className="flex-1 items-center justify-center">
         <ActivityIndicator size="large" color={colors.primary} />
         <Text style={{ color: colors.textMuted }} className="mt-4 font-semibold text-sm">
           Bundling your flow...
@@ -103,7 +145,7 @@ export default function DashboardScreen() {
   }
 
   return (
-    <SafeAreaView style={{ backgroundColor: colors.background }} className="flex-1">
+    <SafeAreaView edges={['top']} style={{ backgroundColor: colors.background }} className="flex-1">
       <StatusBar style={isDark ? 'light' : 'dark'} />
       
       {/* Visual background ambient accent (subtle dark mode premium glow) */}
@@ -267,7 +309,7 @@ export default function DashboardScreen() {
         </View>
 
         {/* Top Habits Section */}
-        {insights?.topHabits && insights.topHabits.length > 0 && (
+        {insights?.topHabits && habits && habits.length > 0 && insights.topHabits.filter((h: TopHabit) => habits.some((activeH: any) => activeH.id === h.habitId)).length > 0 && (
           <View 
             style={{ backgroundColor: colors.surface, borderColor: colors.border }} 
             className="mb-6 rounded-3xl border p-5 shadow-sm"
@@ -285,7 +327,7 @@ export default function DashboardScreen() {
                 <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
               </Pressable>
             </View>
-            {insights.topHabits.slice(0, 3).map((habit: TopHabit, index: number) => (
+            {insights.topHabits.filter((h: TopHabit) => habits?.some((activeH: any) => activeH.id === h.habitId)).slice(0, 3).map((habit: TopHabit, index: number) => (
               <View
                 key={habit.habitId}
                 style={{ borderColor: colors.border }}
@@ -406,7 +448,7 @@ export default function DashboardScreen() {
             <View>
               <Text style={{ color: colors.textMuted }} className="text-sm font-bold mb-3">Upcoming Milestones</Text>
               <View className="flex-row flex-wrap -mx-1.5">
-                {DUMMY_BADGES.map((badge, index) => (
+                {AVAILABLE_BADGES.filter(b => !(badges || []).some((collected: Badge) => collected.name === b.name)).map((badge, index) => (
                   <View key={`locked-${index}`} className="w-1/3 px-1.5 mb-3 opacity-50">
                     <View style={{ backgroundColor: colors.backgroundSecondary, borderColor: colors.border }} className="rounded-2xl p-3 items-center border">
                       <View style={{ backgroundColor: isDark ? '#27272a' : '#f4f4f5' }} className="w-10 h-10 rounded-2xl items-center justify-center mb-2">
@@ -428,7 +470,7 @@ export default function DashboardScreen() {
 }
 
 // Redesigned Stats Card Component
-function StatsCard({ title, value, subtitle, icon, colors, accentColor }: {
+const StatsCard = React.memo(function StatsCard({ title, value, subtitle, icon, colors, accentColor }: {
   title: string;
   value: string | number;
   subtitle: string;
@@ -459,10 +501,10 @@ function StatsCard({ title, value, subtitle, icon, colors, accentColor }: {
       </View>
     </View>
   );
-}
+});
 
 // Redesigned Quick Action Button Component
-function QuickActionButton({ icon, label, onPress, colors }: {
+const QuickActionButton = React.memo(function QuickActionButton({ icon, label, onPress, colors }: {
   icon: string;
   label: string;
   onPress: () => void;
@@ -486,4 +528,4 @@ function QuickActionButton({ icon, label, onPress, colors }: {
       <Text style={{ color: colors.textSecondary }} className="text-[10px] font-bold text-center mt-0.5">{label}</Text>
     </Pressable>
   );
-}
+});

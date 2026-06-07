@@ -1,17 +1,15 @@
-import { useAuth } from '@clerk/clerk-expo';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRef } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { notificationsManager } from './notifications';
-import { badgesApi, challengesApi, entriesApi, focusSessionsApi, habitsApi, insightsApi, type HabitEntry, type Habit } from './api';
 import {
-  localBadgesApi,
-  localChallengesApi,
-  localEntriesApi,
-  localFocusSessionsApi,
-  localHabitsApi,
-  localInsightsApi,
-} from './localStorage';
+  badgesApi,
+  challengesApi,
+  entriesApi,
+  focusSessionsApi,
+  habitsApi,
+  insightsApi,
+  type HabitEntry,
+  type Habit
+} from './api';
 
 // Query keys
 export const queryKeys = {
@@ -28,61 +26,25 @@ export const queryKeys = {
   challengeProgress: (id: string) => ['challengeProgress', id] as const,
 };
 
-// Custom hook to check if user should use local storage only
-function useIsLocalMode() {
-  const { isSignedIn } = useAuth();
-  return !isSignedIn;
-}
-
 // =====================
-// HABITS HOOKS - FAST loading with local-first strategy
+// HABITS HOOKS - Online Only
 // =====================
 
 export function useHabits(active?: boolean) {
-  const isLocal = useIsLocalMode();
-
   return useQuery({
     queryKey: active === undefined ? queryKeys.habits : active ? queryKeys.habitsActive : queryKeys.habitsArchived,
     queryFn: async () => {
-      // For guest mode, use local storage directly (INSTANT)
-      if (isLocal) {
-        return localHabitsApi.getAll(active);
-      }
-
-      // For signed-in users: Try API, but with fast fallback
-      try {
-        const apiData = await habitsApi.getAll(active);
-        // Cache to local storage, preserving unsynced local habits
-        try {
-          const localData = await AsyncStorage.getItem('@focusflow_habits');
-          const localHabits: Habit[] = localData ? JSON.parse(localData) : [];
-          const unsyncedHabits = localHabits.filter(h => h.id.startsWith('local_'));
-          
-          const apiIds = new Set(apiData.map(h => h.id));
-          const filteredUnsynced = unsyncedHabits.filter(h => !apiIds.has(h.id));
-          const mergedHabits = [...filteredUnsynced, ...apiData];
-          
-          await AsyncStorage.setItem('@focusflow_habits', JSON.stringify(mergedHabits));
-        } catch (storageErr) {
-          console.error('[Storage] Failed to cache habits:', storageErr);
-        }
-        return apiData;
-      } catch (error) {
-        console.warn('API failed, falling back to local habits:', error);
-        // Fallback to local storage on API error
-        return localHabitsApi.getAll(active);
-      }
+      return habitsApi.getAll(active);
     },
-    staleTime: 60 * 1000, // 1 minute - data is fresh for 1 min
-    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
-    refetchOnMount: 'always', // Always refetch but show cached immediately
-    refetchOnWindowFocus: false, // Don't refetch on focus (mobile doesn't have windows)
+    staleTime: 30 * 1000, // 30 seconds stale time - cached unless mutation occurs
+    gcTime: 5 * 60 * 1000,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 }
 
 export function useCreateHabit() {
   const queryClient = useQueryClient();
-  const isLocal = useIsLocalMode();
 
   return useMutation({
     mutationFn: async (habit: {
@@ -94,58 +56,73 @@ export function useCreateHabit() {
       goalTarget?: number;
       unit?: string;
     }) => {
-      if (isLocal) {
-        return localHabitsApi.create(habit);
-      }
-      try {
-        return await habitsApi.create(habit);
-      } catch (apiError) {
-        console.warn('API create habit failed, fallback to local:', apiError);
-        return localHabitsApi.create(habit);
-      }
+      return habitsApi.create(habit);
     },
     onMutate: async (newHabit) => {
+      // Cancel outgoing habits fetches
       await queryClient.cancelQueries({ queryKey: queryKeys.habits });
-      const previousHabits = queryClient.getQueriesData({ queryKey: queryKeys.habits });
+      await queryClient.cancelQueries({ queryKey: queryKeys.habitsActive });
 
-      queryClient.setQueriesData({ queryKey: queryKeys.habits }, (old: any) => {
-        if (!old || !Array.isArray(old)) return old;
-        const optimisticHabit = {
-          ...newHabit,
-          id: `optimistic-${Date.now()}`,
-          userId: 'user',
-          active: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-        return [optimisticHabit, ...old];
-      });
+      // Snapshot previous values
+      const previousHabits = queryClient.getQueryData(queryKeys.habits);
+      const previousHabitsActive = queryClient.getQueryData(queryKeys.habitsActive);
 
-      return { previousHabits };
+      // Create a temporary client-side ID
+      const tempId = `temp-${Date.now()}`;
+      const optimisticHabit = {
+        ...newHabit,
+        id: tempId,
+        userId: 'user',
+        active: true,
+        description: newHabit.description ?? null,
+        category: newHabit.category ?? null,
+        color: newHabit.color ?? '#f97316',
+        goalTarget: newHabit.goalTarget ?? null,
+        unit: newHabit.unit ?? null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      // Optimistically update the cache
+      queryClient.setQueryData(queryKeys.habits, (old: any) => 
+        old ? [optimisticHabit, ...old] : [optimisticHabit]
+      );
+      queryClient.setQueryData(queryKeys.habitsActive, (old: any) => 
+        old ? [optimisticHabit, ...old] : [optimisticHabit]
+      );
+
+      return { previousHabits, previousHabitsActive, tempId };
     },
     onError: (err, newHabit, context) => {
+      // Rollback to previous values
       if (context?.previousHabits) {
-        context.previousHabits.forEach(([queryKey, data]) => {
-          queryClient.setQueryData(queryKey, data);
-        });
+        queryClient.setQueryData(queryKeys.habits, context.previousHabits);
+      }
+      if (context?.previousHabitsActive) {
+        queryClient.setQueryData(queryKeys.habitsActive, context.previousHabitsActive);
       }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.habits });
-      notificationsManager.updateScheduledReminders();
+    onSuccess: (data, variables, context) => {
+      // Swap the temporary ID with the real server response
+      const tempId = context?.tempId;
+      if (tempId) {
+        queryClient.setQueryData(queryKeys.habits, (old: any) => {
+          if (!old) return [data];
+          return old.map((h: any) => h.id === tempId ? data : h);
+        });
+        queryClient.setQueryData(queryKeys.habitsActive, (old: any) => {
+          if (!old) return [data];
+          return old.map((h: any) => h.id === tempId ? data : h);
+        });
+      }
+      notificationsManager.updateScheduledReminders('habit created', 5000);
     },
   });
 }
 
-// AI-powered habit generation hook (only works when signed in)
 export function useGenerateHabitsWithAI() {
-  const isLocal = useIsLocalMode();
-
   return useMutation({
     mutationFn: async (prompt: string) => {
-      if (isLocal) {
-        throw new Error('AI habit generation requires signing in');
-      }
       return habitsApi.generateWithAI(prompt);
     },
   });
@@ -153,25 +130,18 @@ export function useGenerateHabitsWithAI() {
 
 export function useUpdateHabit() {
   const queryClient = useQueryClient();
-  const isLocal = useIsLocalMode();
 
   return useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Parameters<typeof habitsApi.update>[1] }) => {
-      if (isLocal) {
-        return localHabitsApi.update(id, data);
-      }
-      try {
-        return await habitsApi.update(id, data);
-      } catch (apiError) {
-        console.warn('API update habit failed, fallback to local:', apiError);
-        return localHabitsApi.update(id, data);
-      }
+      return habitsApi.update(id, data);
     },
     onMutate: async ({ id, data }) => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.habits });
-      const previousHabits = queryClient.getQueriesData({ queryKey: queryKeys.habits });
+      await queryClient.cancelQueries({ queryKey: ['habits'] });
 
-      queryClient.setQueriesData({ queryKey: queryKeys.habits }, (old: any) => {
+      const previousHabits = queryClient.getQueriesData({ queryKey: ['habits'] });
+
+      // Optimistically update all habits query caches
+      queryClient.setQueriesData({ queryKey: ['habits'] }, (old: any) => {
         if (!old || !Array.isArray(old)) return old;
         return old.map((h: any) => h.id === id ? { ...h, ...data, updatedAt: new Date().toISOString() } : h);
       });
@@ -185,42 +155,35 @@ export function useUpdateHabit() {
         });
       }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.habits });
-      notificationsManager.updateScheduledReminders(3000);
+    onSuccess: (data) => {
+      // Replace with real updated habit from server
+      queryClient.setQueriesData({ queryKey: ['habits'] }, (old: any) => {
+        if (!old || !Array.isArray(old)) return old;
+        return old.map((h: any) => h.id === data.id ? data : h);
+      });
+      notificationsManager.updateScheduledReminders('habit updated', 3000);
     },
   });
 }
 
 export function useDeleteHabit() {
   const queryClient = useQueryClient();
-  const isLocal = useIsLocalMode();
 
   return useMutation({
     mutationFn: async (id: string) => {
-      // Force local deletion so cache is immediately cleared
-      try { await localHabitsApi.delete(id); } catch (e) { }
-      
-      if (isLocal || id.startsWith('local_')) {
-        return id;
-      }
-      try {
-        await habitsApi.delete(id);
-        return id;
-      } catch (apiError: any) {
-        console.warn('API delete habit failed, fallback to local:', apiError.response?.data || apiError.message);
-        if (apiError.response) throw apiError; // Throw server errors so UI rolls back
-        return id;
-      }
+      return habitsApi.delete(id);
     },
     onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.habits });
-      const previousHabits = queryClient.getQueriesData({ queryKey: queryKeys.habits });
-      
-      queryClient.setQueriesData({ queryKey: queryKeys.habits }, (old: any) => {
+      await queryClient.cancelQueries({ queryKey: ['habits'] });
+
+      const previousHabits = queryClient.getQueriesData({ queryKey: ['habits'] });
+
+      // Optimistically remove the habit from all query caches
+      queryClient.setQueriesData({ queryKey: ['habits'] }, (old: any) => {
         if (!old || !Array.isArray(old)) return old;
         return old.filter((h: any) => h.id !== id);
       });
+
       return { previousHabits };
     },
     onError: (err, id, context) => {
@@ -230,41 +193,30 @@ export function useDeleteHabit() {
         });
       }
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.habits });
-      notificationsManager.updateScheduledReminders(3000);
+    onSuccess: () => {
+      notificationsManager.updateScheduledReminders('habit deleted', 3000);
     },
   });
 }
 
 export function useArchiveHabit() {
   const queryClient = useQueryClient();
-  const isLocal = useIsLocalMode();
 
   return useMutation({
     mutationFn: async (id: string) => {
-      try { await localHabitsApi.archive(id); } catch (e) { }
-      
-      if (isLocal || id.startsWith('local_')) {
-        return id;
-      }
-      try {
-        await habitsApi.archive(id);
-        return id;
-      } catch (apiError: any) {
-        console.warn('API archive habit failed, fallback to local:', apiError.response?.data || apiError.message);
-        if (apiError.response) throw apiError;
-        return id;
-      }
+      return habitsApi.archive(id);
     },
     onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.habits });
-      const previousHabits = queryClient.getQueriesData({ queryKey: queryKeys.habits });
-      
-      queryClient.setQueriesData({ queryKey: queryKeys.habits }, (old: any) => {
+      await queryClient.cancelQueries({ queryKey: ['habits'] });
+
+      const previousHabits = queryClient.getQueriesData({ queryKey: ['habits'] });
+
+      // Optimistically set active to false
+      queryClient.setQueriesData({ queryKey: ['habits'] }, (old: any) => {
         if (!old || !Array.isArray(old)) return old;
-        return old.map((h: any) => h.id === id ? { ...h, active: false } : h);
+        return old.map((h: any) => h.id === id ? { ...h, active: false, updatedAt: new Date().toISOString() } : h);
       });
+
       return { previousHabits };
     },
     onError: (err, id, context) => {
@@ -274,41 +226,34 @@ export function useArchiveHabit() {
         });
       }
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.habits });
-      notificationsManager.updateScheduledReminders(3000);
+    onSuccess: (data) => {
+      queryClient.setQueriesData({ queryKey: ['habits'] }, (old: any) => {
+        if (!old || !Array.isArray(old)) return old;
+        return old.map((h: any) => h.id === data.id ? data : h);
+      });
+      notificationsManager.updateScheduledReminders('habit archived', 3000);
     },
   });
 }
 
 export function useRestoreHabit() {
   const queryClient = useQueryClient();
-  const isLocal = useIsLocalMode();
 
   return useMutation({
     mutationFn: async (id: string) => {
-      try { await localHabitsApi.restore(id); } catch (e) { }
-      
-      if (isLocal || id.startsWith('local_')) {
-        return id;
-      }
-      try {
-        await habitsApi.restore(id);
-        return id;
-      } catch (apiError: any) {
-        console.warn('API restore habit failed, fallback to local:', apiError.response?.data || apiError.message);
-        if (apiError.response) throw apiError;
-        return id;
-      }
+      return habitsApi.restore(id);
     },
     onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.habits });
-      const previousHabits = queryClient.getQueriesData({ queryKey: queryKeys.habits });
-      
-      queryClient.setQueriesData({ queryKey: queryKeys.habits }, (old: any) => {
+      await queryClient.cancelQueries({ queryKey: ['habits'] });
+
+      const previousHabits = queryClient.getQueriesData({ queryKey: ['habits'] });
+
+      // Optimistically set active to true
+      queryClient.setQueriesData({ queryKey: ['habits'] }, (old: any) => {
         if (!old || !Array.isArray(old)) return old;
-        return old.map((h: any) => h.id === id ? { ...h, active: true } : h);
+        return old.map((h: any) => h.id === id ? { ...h, active: true, updatedAt: new Date().toISOString() } : h);
       });
+
       return { previousHabits };
     },
     onError: (err, id, context) => {
@@ -318,69 +263,40 @@ export function useRestoreHabit() {
         });
       }
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.habits });
-      notificationsManager.updateScheduledReminders();
+    onSuccess: (data) => {
+      queryClient.setQueriesData({ queryKey: ['habits'] }, (old: any) => {
+        if (!old || !Array.isArray(old)) return old;
+        return old.map((h: any) => h.id === data.id ? data : h);
+      });
+      notificationsManager.updateScheduledReminders('habit restored', 5000);
     },
   });
 }
 
 // =====================
-// ENTRIES HOOKS - FAST loading with instant optimistic updates
+// ENTRIES HOOKS - Online Only
 // =====================
 
 export function useEntries(startDate: string, endDate: string) {
-  const isLocal = useIsLocalMode();
-
   return useQuery({
     queryKey: queryKeys.entries(startDate, endDate),
     queryFn: async () => {
-      // For guest mode, use local storage directly (INSTANT)
-      if (isLocal) {
-        return localEntriesApi.getByDateRange(startDate, endDate);
-      }
-
-      // For signed-in users: Try API with fallback
-      try {
-        const data = await entriesApi.getByDateRange(startDate, endDate);
-        // Normalize dates from API (remove time component)
-        const mappedData = data.map(e => ({
-          ...e,
-          entryDate: typeof e.entryDate === 'string' ? e.entryDate.split('T')[0] : formatDate(e.entryDate)
-        }));
-
-        // Cache to local storage, preserving unsynced local entries
-        try {
-          const localData = await AsyncStorage.getItem('@focusflow_entries');
-          const localEntries: HabitEntry[] = localData ? JSON.parse(localData) : [];
-          const unsyncedEntries = localEntries.filter(e => e.id.startsWith('local_'));
-          
-          const fetchedIds = new Set(mappedData.map(e => `${e.habitId}-${e.entryDate}`));
-          const filteredUnsynced = unsyncedEntries.filter(e => !fetchedIds.has(`${e.habitId}-${e.entryDate}`));
-          const mergedEntries = [...filteredUnsynced, ...mappedData];
-          
-          await AsyncStorage.setItem('@focusflow_entries', JSON.stringify(mergedEntries));
-        } catch (storageErr) {
-          console.error('[Storage] Failed to cache entries:', storageErr);
-        }
-
-        return mappedData;
-      } catch (error) {
-        console.warn('API failed for entries, falling back to local:', error);
-        return localEntriesApi.getByDateRange(startDate, endDate);
-      }
+      const data = await entriesApi.getByDateRange(startDate, endDate);
+      const normalized = data.map(e => ({
+        ...e,
+        entryDate: typeof e.entryDate === 'string' ? e.entryDate.split('T')[0] : formatDate(e.entryDate)
+      }));
+      return normalized;
     },
-    staleTime: 30 * 1000, // 30 seconds - entries need to be fresher
+    staleTime: 15 * 1000, // 15 seconds stale time - cached unless toggle occurs
     gcTime: 5 * 60 * 1000,
     refetchOnMount: 'always',
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
   });
 }
 
 export function useToggleEntry() {
   const queryClient = useQueryClient();
-  const isLocal = useIsLocalMode();
-  const pendingMutations = useRef<Set<string>>(new Set());
 
   return useMutation({
     mutationFn: async ({
@@ -396,54 +312,16 @@ export function useToggleEntry() {
       value?: number;
       notes?: string;
     }) => {
-      const mutationKey = `${habitId}-${entryDate}`;
-
-      // Prevent duplicate requests - but return fake entry to not break optimistic update
-      if (pendingMutations.current.has(mutationKey)) {
-        console.log('Skipping duplicate mutation for:', mutationKey);
-        // Return a fake entry so optimistic update works
-        return {
-          id: `skip-${Date.now()}`,
-          habitId,
-          userId: 'user',
-          entryDate,
-          completed,
-          value: value ?? null,
-          notes: notes ?? null,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-      }
-
-
-      pendingMutations.current.add(mutationKey);
-
-      try {
-        if (isLocal) {
-          return await localEntriesApi.toggle(habitId, entryDate, completed, value, notes);
-        }
-
-        // For signed-in users: try API, fallback to local
-        try {
-          return await entriesApi.toggle(habitId, entryDate, completed, value, notes);
-        } catch (apiError) {
-          console.warn('API toggle failed, saving locally:', apiError);
-          // Save locally as fallback
-          return await localEntriesApi.toggle(habitId, entryDate, completed, value, notes);
-        }
-      } finally {
-        pendingMutations.current.delete(mutationKey);
-      }
+      return entriesApi.toggle(habitId, entryDate, completed, value, notes);
     },
-    // CRITICAL: Optimistic update for INSTANT UI feedback
     onMutate: async (newEntry) => {
-      // Cancel any outgoing refetches to prevent overwrite
+      // Cancel entries refetches
       await queryClient.cancelQueries({ queryKey: ['entries'] });
 
-      // Snapshot all entry queries for potential rollback
+      // Snapshot current values
       const previousEntries = queryClient.getQueriesData({ queryKey: ['entries'] });
 
-      // Optimistically update ALL matching entry queries IMMEDIATELY
+      // Optimistically update
       queryClient.setQueriesData({ queryKey: ['entries'] }, (old: any) => {
         if (!old || !Array.isArray(old)) return old;
 
@@ -452,18 +330,18 @@ export function useToggleEntry() {
         );
 
         if (existingIndex >= 0) {
-          // Update existing entry
           const updated = [...old];
           updated[existingIndex] = {
             ...updated[existingIndex],
             completed: newEntry.completed,
+            value: newEntry.value !== undefined ? newEntry.value : updated[existingIndex].value,
+            notes: newEntry.notes !== undefined ? newEntry.notes : updated[existingIndex].notes,
             updatedAt: new Date().toISOString(),
           };
           return updated;
         } else {
-          // Add new entry optimistically
           return [...old, {
-            id: `optimistic-${Date.now()}`,
+            id: `temp-entry-${Date.now()}`,
             habitId: newEntry.habitId,
             userId: 'user',
             entryDate: newEntry.entryDate,
@@ -479,20 +357,23 @@ export function useToggleEntry() {
       return { previousEntries };
     },
     onError: (err, _newEntry, context) => {
-      console.error('Toggle entry failed:', err);
-      // Rollback on error
       if (context?.previousEntries) {
         context.previousEntries.forEach(([queryKey, data]) => {
           queryClient.setQueryData(queryKey, data);
         });
       }
     },
-    onSettled: () => {
-      // Don't invalidate entries - we already updated optimistically
-      // Only invalidate related queries
+    onSuccess: (data) => {
+      // Replace with real database entry
+      queryClient.setQueriesData({ queryKey: ['entries'] }, (old: any) => {
+        if (!old || !Array.isArray(old)) return old;
+        return old.map((e: any) => 
+          (e.habitId === data.habitId && e.entryDate === data.entryDate) ? data : e
+        );
+      });
+      // Invalidate streaks and insights since they are aggregate computed data
       queryClient.invalidateQueries({ queryKey: queryKeys.insights });
       queryClient.invalidateQueries({ queryKey: queryKeys.streaks });
-      notificationsManager.updateScheduledReminders(3000);
     },
   });
 }
@@ -502,41 +383,23 @@ export function useToggleEntry() {
 // =====================
 
 export function useInsights() {
-  const isLocal = useIsLocalMode();
-
   return useQuery({
     queryKey: queryKeys.insights,
     queryFn: async () => {
-      if (isLocal) {
-        return localInsightsApi.getSummary();
-      }
-      try {
-        return await insightsApi.getSummary();
-      } catch {
-        return localInsightsApi.getSummary();
-      }
+      return insightsApi.getSummary();
     },
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    staleTime: 15 * 1000, // Cached unless invalidated by toggle/creation
     refetchOnMount: 'always',
   });
 }
 
 export function useStreaks() {
-  const isLocal = useIsLocalMode();
-
   return useQuery({
     queryKey: queryKeys.streaks,
     queryFn: async () => {
-      if (isLocal) {
-        return localInsightsApi.getStreaks();
-      }
-      try {
-        return await insightsApi.getStreaks();
-      } catch {
-        return localInsightsApi.getStreaks();
-      }
+      return insightsApi.getStreaks();
     },
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    staleTime: 15 * 1000, // Cached unless invalidated by toggle/creation
     refetchOnMount: 'always',
   });
 }
@@ -546,21 +409,30 @@ export function useStreaks() {
 // =====================
 
 export function useBadges() {
-  const isLocal = useIsLocalMode();
-
   return useQuery({
     queryKey: queryKeys.badges,
     queryFn: async () => {
-      if (isLocal) {
-        return localBadgesApi.getAll();
-      }
       try {
         return await badgesApi.getAll();
-      } catch {
-        return localBadgesApi.getAll();
+      } catch (error) {
+        console.warn('API failed for badges:', error);
+        return [];
       }
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useAwardBadge() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ name, metadata }: { name: string; metadata?: Record<string, any> }) => {
+      return badgesApi.awardBadge(name, metadata);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.badges });
+    },
   });
 }
 
@@ -569,58 +441,31 @@ export function useBadges() {
 // =====================
 
 export function useFocusSessions() {
-  const isLocal = useIsLocalMode();
-
   return useQuery({
     queryKey: queryKeys.focusSessions,
     queryFn: async () => {
-      if (isLocal) {
-        return localFocusSessionsApi.getAll();
-      }
-      try {
-        return await focusSessionsApi.getAll();
-      } catch {
-        return localFocusSessionsApi.getAll();
-      }
+      return focusSessionsApi.getAll();
     },
-    staleTime: 60 * 1000, // 1 minute
+    staleTime: 30 * 1000, // Cached unless session created
   });
 }
 
 export function useFocusStats() {
-  const isLocal = useIsLocalMode();
-
   return useQuery({
     queryKey: queryKeys.focusStats,
     queryFn: async () => {
-      if (isLocal) {
-        return localFocusSessionsApi.getStats();
-      }
-      try {
-        return await focusSessionsApi.getStats();
-      } catch {
-        return localFocusSessionsApi.getStats();
-      }
+      return focusSessionsApi.getStats();
     },
-    staleTime: 60 * 1000, // 1 minute
+    staleTime: 30 * 1000, // Cached unless session created
   });
 }
 
 export function useCreateFocusSession() {
   const queryClient = useQueryClient();
-  const isLocal = useIsLocalMode();
 
   return useMutation({
     mutationFn: async (data: { habitId?: string; duration: number; notes?: string }) => {
-      if (isLocal) {
-        return localFocusSessionsApi.create(data);
-      }
-      try {
-        return await focusSessionsApi.create(data);
-      } catch (apiError) {
-        console.warn('API create focus session failed, fallback to local:', apiError);
-        return localFocusSessionsApi.create(data);
-      }
+      return focusSessionsApi.create(data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.focusSessions });
@@ -635,58 +480,31 @@ export function useCreateFocusSession() {
 // =====================
 
 export function useChallenges() {
-  const isLocal = useIsLocalMode();
-
   return useQuery({
     queryKey: queryKeys.challenges,
     queryFn: async () => {
-      if (isLocal) {
-        return localChallengesApi.getAll();
-      }
-      try {
-        return await challengesApi.getAll();
-      } catch {
-        return localChallengesApi.getAll();
-      }
+      return challengesApi.getAll();
     },
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    staleTime: 30 * 1000,
   });
 }
 
 export function useUserChallenges() {
-  const isLocal = useIsLocalMode();
-
   return useQuery({
     queryKey: [...queryKeys.challenges, 'user'],
     queryFn: async () => {
-      if (isLocal) {
-        return localChallengesApi.getUserChallenges();
-      }
-      try {
-        return await challengesApi.getUserChallenges();
-      } catch {
-        return localChallengesApi.getUserChallenges();
-      }
+      return challengesApi.getUserChallenges();
     },
-    staleTime: 60 * 1000, // 1 minute
+    staleTime: 30 * 1000,
   });
 }
 
 export function useJoinChallenge() {
   const queryClient = useQueryClient();
-  const isLocal = useIsLocalMode();
 
   return useMutation({
     mutationFn: async (challengeId: string) => {
-      if (isLocal) {
-        return localChallengesApi.join(challengeId);
-      }
-      try {
-        return await challengesApi.join(challengeId);
-      } catch (apiError) {
-        console.warn('API join challenge failed, fallback to local:', apiError);
-        return localChallengesApi.join(challengeId);
-      }
+      return challengesApi.join(challengeId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.challenges });
@@ -695,21 +513,12 @@ export function useJoinChallenge() {
 }
 
 export function useChallengeProgress(challengeId: string) {
-  const isLocal = useIsLocalMode();
-
   return useQuery({
     queryKey: queryKeys.challengeProgress(challengeId),
     queryFn: async () => {
-      if (isLocal) {
-        return localChallengesApi.getProgress(challengeId);
-      }
-      try {
-        return await challengesApi.getProgress(challengeId);
-      } catch {
-        return localChallengesApi.getProgress(challengeId);
-      }
+      return challengesApi.getProgress(challengeId);
     },
-    staleTime: 60 * 1000, // 1 minute
+    staleTime: 30 * 1000,
     enabled: !!challengeId,
   });
 }
@@ -718,7 +527,6 @@ export function useChallengeProgress(challengeId: string) {
 // HELPER FUNCTIONS
 // =====================
 
-// Helper to get date range for current month
 export function getCurrentMonthRange() {
   const now = new Date();
   const year = now.getFullYear();
@@ -732,7 +540,6 @@ export function getCurrentMonthRange() {
   };
 }
 
-// Helper to get date range for a specific month
 export function getMonthRange(year: number, month: number) {
   const start = new Date(year, month, 1);
   const end = new Date(year, month + 1, 0);
@@ -743,7 +550,6 @@ export function getMonthRange(year: number, month: number) {
   };
 }
 
-// Helper to format date in local timezone (YYYY-MM-DD)
 function formatDateLocal(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -751,18 +557,15 @@ function formatDateLocal(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-// Helper to format date
 export function formatDate(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date;
   return formatDateLocal(d);
 }
 
-// Helper to get today's date
 export function getToday(): string {
   return formatDateLocal(new Date());
 }
 
-// Helper to get all days in a month as date strings
 export function getMonthDays(year: number, month: number): string[] {
   const days: string[] = [];
   const daysInMonth = new Date(year, month + 1, 0).getDate();

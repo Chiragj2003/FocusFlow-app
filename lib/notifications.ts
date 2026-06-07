@@ -56,35 +56,10 @@ export const notificationsManager = {
       const hasPermission = await this.requestPermissions();
       if (!hasPermission) return;
 
-      // 2. Fetch habits and entries from AsyncStorage
-      const habitsData = await AsyncStorage.getItem('@focusflow_habits');
-      const entriesData = await AsyncStorage.getItem('@focusflow_entries');
-
-      const habits: any[] = habitsData ? JSON.parse(habitsData) : [];
-      const entries: any[] = entriesData ? JSON.parse(entriesData) : [];
-
-      // Only count active habits
-      const activeHabits = habits.filter(h => h.active !== false);
-      if (activeHabits.length === 0) {
-        console.log('[Notifications] No active habits. Skipping scheduling.');
-        return;
-      }
-
-      // Check today's completions (using YYYY-MM-DD local format)
-      const date = new Date();
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      const todayStr = `${year}-${month}-${day}`;
-
-      const todayEntries = entries.filter(e => e.entryDate === todayStr && e.completed === true);
-      const incompleteCount = activeHabits.length - todayEntries.length;
-      const allCompletedToday = incompleteCount <= 0;
-
       const reminderTimes = [
         { hour: 6, title: "Morning Habit Check 🌅", body: "Rise and shine! Your habits are waiting. Don't start the day with unfinished business - check off your morning goals now!" },
         { hour: 11, title: "Mid-day Consistency Check ⚡", body: "Focus check! You still have incomplete habits for today. Don't let your streak slip away—take action now!" },
-        { hour: 16, title: "Afternoon Habit Sync 🧘", body: "Consistency is power! Some of your daily tasks are still marked as 'not done'. Take a quick 2-minute break and complete them!" },
+        { hour: 16, title: "Afternoon Habit Sync 🧘", body: "Consistency is power! Keep your daily goals on track and log your progress now!" },
         { hour: 21, title: "Evening Reflection 🌙", body: "Day's ending soon! Guard your streaks. Make sure you don't sleep on incomplete habits. Log your progress now!" },
       ];
 
@@ -93,14 +68,6 @@ export const notificationsManager = {
       for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
         const checkDate = new Date();
         checkDate.setDate(now.getDate() + dayOffset);
-
-        // For today (dayOffset === 0)
-        if (dayOffset === 0) {
-          if (allCompletedToday) {
-            console.log('[Notifications] Today\'s habits are all complete. Skipping today\'s reminders.');
-            continue;
-          }
-        }
 
         for (const time of reminderTimes) {
           const triggerDate = new Date(checkDate);
@@ -111,19 +78,10 @@ export const notificationsManager = {
             continue;
           }
 
-          // For today, customize the message with the exact number of incomplete habits!
-          let title = time.title;
-          let body = time.body;
-
-          if (dayOffset === 0) {
-            title = "Habits Pending! ⚠️";
-            body = `You have ${incompleteCount} habit${incompleteCount > 1 ? 's' : ''} left to complete today. Keep your streak alive!`;
-          }
-
           await Notifications.scheduleNotificationAsync({
             content: {
-              title: title,
-              body: body,
+              title: time.title,
+              body: time.body,
               sound: true,
             },
             trigger: {
@@ -149,11 +107,14 @@ export const notificationsManager = {
   },
 
   // Helper to load settings and refresh scheduled reminders
-  async updateScheduledReminders(debounceMs = 0): Promise<void> {
+  async updateScheduledReminders(reason: string, debounceMs = 0): Promise<void> {
     if (Platform.OS === 'web') return;
+
+    console.log(`[Notifications] updateScheduledReminders triggered. Reason: ${reason}`);
 
     const execute = async () => {
       try {
+        console.log(`[Notifications] Executing update of scheduled reminders. Trigger reason: ${reason}`);
         const notifyVal = await AsyncStorage.getItem('@focusflow_settings_notifications');
         const dailyVal = await AsyncStorage.getItem('@focusflow_settings_daily_reminder');
 

@@ -48,7 +48,7 @@ const DayCell = memo(({
         justifyContent: 'center',
       }}
     >
-      {completed && <Ionicons name="checkmark" size={18} color="#fff" />}
+      {completed && <Ionicons name="checkmark" size={18} color={primaryColor === '#f97316' ? (color === primaryColor ? '#fff' : '#000') : '#fff'} />}
     </Pressable>
   );
 });
@@ -115,7 +115,7 @@ const HabitRow = memo(({
             {habit.title}
           </Text>
         </View>
-        <Ionicons name="ellipsis-horizontal" size={12} color="#71717a" className="shrink-0" />
+        <Ionicons name="ellipsis-horizontal" size={12} color="#71717a" style={{ flexShrink: 0 }} />
       </Pressable>
 
       {/* Cells Column */}

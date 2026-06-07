@@ -1,8 +1,9 @@
 import { Habit } from '@/lib/api';
-import { useCreateFocusSession, useFocusStats, useHabits, useChallenges, useUserChallenges, useJoinChallenge } from '@/lib/hooks';
+import { useCreateFocusSession, useFocusStats, useHabits, useChallenges, useUserChallenges, useJoinChallenge, useToggleEntry, getToday } from '@/lib/hooks';
 import { useTheme } from '@/lib/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { useAudioPlayer } from 'expo-audio';
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -27,6 +28,15 @@ const PRESETS = [
   { label: '60m', value: 60 },
 ];
 
+const SOUNDS = [
+  { id: 'none', label: 'None', source: null, icon: 'volume-mute-outline' },
+  { id: 'rain', label: 'Rain', source: require('@/assets/audio/rain.wav'), icon: 'water-outline' },
+  { id: 'cafe', label: 'Cafe', source: require('@/assets/audio/cafe.wav'), icon: 'cafe-outline' },
+  { id: 'ocean', label: 'Ocean Waves', source: require('@/assets/audio/ocean.wav'), icon: 'radio-outline' },
+  { id: 'forest', label: 'Forest Ambience', source: require('@/assets/audio/forest.wav'), icon: 'leaf-outline' },
+  { id: 'white_noise', label: 'White Noise', source: require('@/assets/audio/white_noise.wav'), icon: 'options-outline' },
+];
+
 type TimerState = 'idle' | 'running' | 'paused' | 'completed';
 
 export default function FocusTimerScreen() {
@@ -42,10 +52,21 @@ export default function FocusTimerScreen() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number>(0);
   const pausedTimeRef = useRef<number>(0);
+  const [selectedSound, setSelectedSound] = useState(SOUNDS[0]);
+  const [showSoundPicker, setShowSoundPicker] = useState(false);
+
+  const player = useAudioPlayer(selectedSound.source);
+
+  useEffect(() => {
+    if (player) {
+      player.loop = true;
+    }
+  }, [player]);
 
   const { data: habits } = useHabits(true);
   const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useFocusStats();
   const createSession = useCreateFocusSession();
+  const toggleEntryMutation = useToggleEntry();
   
   // Size the circle based on screen width so it's always perfectly centered and responsive
   const screenWidth = Dimensions.get('window').width;
@@ -64,6 +85,33 @@ export default function FocusTimerScreen() {
   // Calculate progress percentage
   const progress = ((duration * 60 - timeLeft) / (duration * 60)) * 100;
 
+  // Audio functions
+  const playSound = async () => {
+    if (selectedSound.source && player) {
+      try {
+        player.play();
+      } catch (e) {
+        console.warn("Failed to load or play sound:", e);
+      }
+    }
+  };
+
+  const stopSound = async () => {
+    if (player) {
+      try {
+        player.pause();
+      } catch (e) { }
+    }
+  };
+
+  const unloadSound = async () => {
+    if (player) {
+      try {
+        player.pause();
+      } catch (e) { }
+    }
+  };
+
   // Start timer
   const startTimer = useCallback(() => {
     if (timerState === 'idle') {
@@ -74,13 +122,15 @@ export default function FocusTimerScreen() {
     }
     
     setTimerState('running');
+    playSound();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-  }, [duration, timeLeft, timerState]);
+  }, [duration, timeLeft, timerState, selectedSound]);
 
   // Pause timer
   const pauseTimer = useCallback(() => {
     setTimerState('paused');
     pausedTimeRef.current = timeLeft;
+    stopSound();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, [timeLeft]);
 
@@ -92,6 +142,7 @@ export default function FocusTimerScreen() {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
+    unloadSound();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, [duration]);
 
@@ -99,6 +150,22 @@ export default function FocusTimerScreen() {
   const completeSession = useCallback(async () => {
     const actualDuration = duration * 60 - timeLeft;
     
+    // Auto-log Deep Work habit if session is 25+ mins
+    if (actualDuration >= 25 * 60) {
+      const deepWorkHabit = habits?.find((h: Habit) => h.title.toLowerCase() === 'deep work');
+      if (deepWorkHabit) {
+        try {
+          await toggleEntryMutation.mutateAsync({
+            habitId: deepWorkHabit.id,
+            entryDate: getToday(),
+            completed: true
+          });
+        } catch (e) {
+          console.error("Failed to auto-log deep work", e);
+        }
+      }
+    }
+
     try {
       await createSession.mutateAsync({
         habitId: selectedHabitId || undefined,
@@ -144,6 +211,7 @@ export default function FocusTimerScreen() {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
+      unloadSound();
     };
   }, [timerState]);
 
@@ -165,7 +233,7 @@ export default function FocusTimerScreen() {
   const activeColor = selectedHabit ? selectedHabit.color : colors.primary;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.background }}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       
       <ScrollView className="flex-1" contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
@@ -238,9 +306,72 @@ export default function FocusTimerScreen() {
         <View className="px-6">
           {timerState === 'idle' && (
             <>
+              {/* Ambient Sound Button */}
+              <Pressable
+                onPress={() => { setShowSoundPicker(!showSoundPicker); setShowHabitPicker(false); }}
+                className="flex-row items-center justify-between p-4 rounded-xl border mb-4"
+                style={{ 
+                  backgroundColor: isDark ? 'rgba(39, 39, 42, 0.5)' : colors.surface, 
+                  borderColor: isDark ? 'rgba(63, 63, 70, 0.5)' : colors.border 
+                }}
+              >
+                <View className="flex-row items-center">
+                  <View 
+                    style={{ backgroundColor: selectedSound.id !== 'none' ? `${colors.primary}20` : isDark ? '#3f3f46' : '#f4f4f5' }} 
+                    className="w-10 h-10 rounded-full items-center justify-center mr-3"
+                  >
+                    <Ionicons 
+                      name={selectedSound.icon as any} 
+                      size={20} 
+                      color={selectedSound.id !== 'none' ? colors.primary : colors.textMuted} 
+                    />
+                  </View>
+                  <View>
+                    <Text style={{ color: colors.textMuted }} className="text-xs font-medium mb-0.5">
+                      Ambient Sound
+                    </Text>
+                    <Text style={{ color: selectedSound.id !== 'none' ? colors.text : colors.textMuted }} className="font-semibold text-base">
+                      {selectedSound.label}
+                    </Text>
+                  </View>
+                </View>
+                <Ionicons name={showSoundPicker ? "chevron-up" : "chevron-down"} size={20} color={colors.textMuted} />
+              </Pressable>
+
+              {/* Sound Picker */}
+              {showSoundPicker && (
+                <View 
+                  className="mb-4 rounded-xl border overflow-hidden"
+                  style={{ 
+                    backgroundColor: isDark ? 'rgba(39, 39, 42, 0.5)' : colors.surface, 
+                    borderColor: isDark ? 'rgba(63, 63, 70, 0.5)' : colors.border 
+                  }}
+                >
+                  {SOUNDS.map((sound) => (
+                    <Pressable
+                      key={sound.id}
+                      onPress={() => {
+                        setSelectedSound(sound);
+                        setShowSoundPicker(false);
+                      }}
+                      style={{ borderColor: isDark ? 'rgba(63, 63, 70, 0.5)' : colors.border }}
+                      className="flex-row items-center px-4 py-3 border-b last:border-b-0"
+                    >
+                      <View className="w-8 h-8 rounded-full bg-zinc-500/10 mr-3 items-center justify-center">
+                        <Ionicons name={sound.icon as any} size={16} color={selectedSound.id === sound.id ? colors.primary : colors.textMuted} />
+                      </View>
+                      <Text style={{ color: colors.text }} className="font-medium text-sm flex-1">{sound.label}</Text>
+                      {selectedSound.id === sound.id && (
+                        <Ionicons name="checkmark" size={20} color={colors.primary} />
+                      )}
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+
               {/* Link Habit Button */}
               <Pressable
-                onPress={() => setShowHabitPicker(!showHabitPicker)}
+                onPress={() => { setShowHabitPicker(!showHabitPicker); setShowSoundPicker(false); }}
                 className="flex-row items-center justify-between p-4 rounded-xl border mb-4"
                 style={{ 
                   backgroundColor: isDark ? 'rgba(39, 39, 42, 0.5)' : colors.surface, 
@@ -320,7 +451,7 @@ export default function FocusTimerScreen() {
               )}
 
               {/* Duration Presets */}
-              {!showHabitPicker && (
+              {!showHabitPicker && !showSoundPicker && (
                 <View className="mb-6">
                   {isCustomMode ? (
                     <View className="flex-row items-center gap-2">
@@ -420,7 +551,7 @@ export default function FocusTimerScreen() {
                 className="py-4 rounded-xl items-center justify-center flex-row"
                 style={{ backgroundColor: activeColor }}
               >
-                <Ionicons name="play" size={20} color="#ffffff" className="mr-2" />
+                <Ionicons name="play" size={20} color="#ffffff" style={{ marginRight: 8 }} />
                 <Text className="text-white font-bold text-base tracking-wide">Start Focus</Text>
               </Pressable>
             ) : timerState === 'running' ? (
@@ -430,7 +561,7 @@ export default function FocusTimerScreen() {
                   style={{ backgroundColor: isDark ? 'rgba(39, 39, 42, 0.8)' : colors.surface }}
                   className="flex-1 py-4 rounded-xl items-center flex-row justify-center border border-zinc-200 dark:border-zinc-800"
                 >
-                  <Ionicons name="pause" size={20} color={colors.text} className="mr-2" />
+                  <Ionicons name="pause" size={20} color={colors.text} style={{ marginRight: 8 }} />
                   <Text style={{ color: colors.text }} className="font-bold text-base tracking-wide">Pause</Text>
                 </Pressable>
                 <Pressable
@@ -448,7 +579,7 @@ export default function FocusTimerScreen() {
                   className="flex-1 py-4 rounded-xl items-center justify-center flex-row"
                   style={{ backgroundColor: colors.success }}
                 >
-                  <Ionicons name="play" size={20} color="#ffffff" className="mr-2" />
+                  <Ionicons name="play" size={20} color="#ffffff" style={{ marginRight: 8 }} />
                   <Text className="text-white font-bold text-base tracking-wide">Resume</Text>
                 </Pressable>
                 <Pressable

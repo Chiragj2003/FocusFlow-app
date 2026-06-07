@@ -42,7 +42,7 @@ export default function SignInScreen() {
       setError('');
       
       const { createdSessionId, setActive: setOAuthActive } = await startGoogleOAuth({
-        redirectUrl: Linking.createURL('/(tabs)', { scheme: 'focusflow' }),
+        redirectUrl: Linking.createURL('/', { scheme: 'focusflow' }),
       });
 
       if (createdSessionId && setOAuthActive) {
@@ -64,7 +64,7 @@ export default function SignInScreen() {
       setError('');
       
       const { createdSessionId, setActive: setOAuthActive } = await startGithubOAuth({
-        redirectUrl: Linking.createURL('/(tabs)', { scheme: 'focusflow' }),
+        redirectUrl: Linking.createURL('/', { scheme: 'focusflow' }),
       });
 
       if (createdSessionId && setOAuthActive) {

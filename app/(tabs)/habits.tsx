@@ -8,7 +8,6 @@ import {
   useCreateHabit,
   useDeleteHabit,
   useEntries,
-  useGenerateHabitsWithAI,
   useHabits,
   useRestoreHabit,
   useToggleEntry
@@ -23,6 +22,8 @@ import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, Pressable, RefreshControl, ScrollView, Text, TextInput, View, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+
 
 // Habit colors matching the web app
 const habitColors = [
@@ -251,24 +252,13 @@ function generateHabitLocally(userInput: string) {
 }
 
 export default function HabitsScreen() {
+  const router = useRouter();
   const { isDark, colors } = useTheme();
   const { isSignedIn } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
-  const [showAIGenerator, setShowAIGenerator] = useState(false);
-  const [aiPrompt, setAIPrompt] = useState('');
-  const [aiGenerating, setAIGenerating] = useState(false);
-  const [aiSuggestions, setAISuggestions] = useState<Array<{
-    title: string;
-    description: string;
-    category: string;
-    color: string;
-    goalType: 'binary' | 'duration' | 'quantity';
-    goalTarget?: number;
-    unit?: string;
-  }>>([]);
   const [selectedTemplateCategory, setSelectedTemplateCategory] = useState<string | null>(null);
 
   // Form state
@@ -313,7 +303,6 @@ export default function HabitsScreen() {
   const restoreHabit = useRestoreHabit();
   const deleteHabit = useDeleteHabit();
   const toggleEntry = useToggleEntry();
-  const generateWithAI = useGenerateHabitsWithAI();
 
   const habits = showArchived ? archivedHabits : activeHabits;
 
@@ -373,66 +362,6 @@ export default function HabitsScreen() {
     );
   }, [getTodayEntry, today, toggleEntry]);
 
-  // AI Habit Generation
-  const handleGenerateWithAI = useCallback(async () => {
-    if (!aiPrompt.trim()) {
-      Alert.alert('Error', 'Please describe the habits you want to build');
-      return;
-    }
-
-    setAIGenerating(true);
-    try {
-      if (isSignedIn) {
-        const result = await generateWithAI.mutateAsync(aiPrompt);
-        setAISuggestions(result.habits);
-      } else {
-        // Guest mode / offline: Use local fallback generation
-        const suggestion = generateHabitLocally(aiPrompt);
-        setAISuggestions([suggestion]);
-      }
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (error) {
-      console.error('Failed to generate habits:', error);
-      Alert.alert('Error', 'Failed to generate habits. Please try again.');
-    } finally {
-      setAIGenerating(false);
-    }
-  }, [aiPrompt, isSignedIn, generateWithAI]);
-
-  const handleAddAISuggestion = useCallback((suggestion: typeof aiSuggestions[0]) => {
-    const titleNormalized = suggestion.title.trim().toLowerCase().replace(/\s+/g, ' ');
-    const isDuplicate = activeHabits?.some((h: Habit) => h.title.trim().toLowerCase().replace(/\s+/g, ' ') === titleNormalized);
-    if (isDuplicate) {
-      Alert.alert('Duplicate Habit', `A habit named "${suggestion.title}" already exists.`);
-      return;
-    }
-
-    // Update UI immediately
-    setAISuggestions(prev => prev.filter(s => s.title !== suggestion.title));
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-    if (aiSuggestions.length === 1) {
-      setShowAIGenerator(false);
-      setAIPrompt('');
-    }
-
-    createHabit.mutate({
-      title: suggestion.title,
-      description: suggestion.description,
-      category: suggestion.category,
-      color: suggestion.color,
-      goalType: suggestion.goalType,
-      goalTarget: suggestion.goalTarget,
-      unit: suggestion.unit,
-    }, {
-      onError: (error: any) => {
-        console.error('Failed to create habit from AI:', error);
-        const serverMsg = error?.response?.data?.error || error?.response?.data?.details || error?.message;
-        Alert.alert('Error', serverMsg || 'Failed to create habit. Please try again.');
-      }
-    });
-  }, [createHabit, aiSuggestions, activeHabits]);
-
   const handleAddHabit = useCallback(() => {
     if (!newHabitTitle.trim()) {
       Alert.alert('Error', 'Please enter a habit name');
@@ -454,9 +383,6 @@ export default function HabitsScreen() {
     setGoalTarget('');
     setGoalUnit('');
     setShowTemplates(false);
-    setShowAIGenerator(false);
-    setAIPrompt('');
-    setAISuggestions([]);
     setIsModalOpen(false);
 
     createHabit.mutate({
@@ -565,7 +491,7 @@ export default function HabitsScreen() {
   // With our caching system, we should almost always have data immediately
   if (habitsLoading && !activeHabits && !refreshing) {
     return (
-      <SafeAreaView style={{ backgroundColor: colors.background }} className="flex-1 items-center justify-center">
+      <SafeAreaView edges={['top']} style={{ backgroundColor: colors.background }} className="flex-1 items-center justify-center">
         <ActivityIndicator size="large" color={colors.primary} />
         <Text style={{ color: colors.textMuted }} className="mt-4">Loading habits...</Text>
       </SafeAreaView>
@@ -573,7 +499,7 @@ export default function HabitsScreen() {
   }
 
   return (
-    <SafeAreaView style={{ backgroundColor: colors.background }} className="flex-1">
+    <SafeAreaView edges={['top']} style={{ backgroundColor: colors.background }} className="flex-1">
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <ScrollView
         className="flex-1 px-4"
@@ -608,18 +534,6 @@ export default function HabitsScreen() {
             <Text className="text-blue-400 font-medium text-sm">Add Habit</Text>
           </Pressable>
 
-          {/* AI Create Button */}
-          <Pressable
-            onPress={() => {
-              setShowAIGenerator(true);
-              setIsModalOpen(true);
-            }}
-            className="flex-row items-center space-x-2 px-3 py-2 rounded-lg bg-violet-500/10 active:bg-violet-500/20"
-          >
-            <Ionicons name="sparkles" size={16} color="#a78bfa" />
-            <Text className="text-violet-400 font-medium text-sm">Add with AI</Text>
-          </Pressable>
-
           {/* Templates Button */}
           <Pressable
             onPress={() => {
@@ -635,8 +549,7 @@ export default function HabitsScreen() {
           {/* Challenges Button */}
           <Pressable
             className="flex-row items-center space-x-2 px-3 py-2 rounded-lg bg-emerald-400/10 active:bg-emerald-400/20"
-            // TODO: Implement challenges modal
-            onPress={() => Alert.alert('Coming Soon', 'Challenges feature will be available soon!')}
+            onPress={() => router.push('/achievements')}
           >
             <Ionicons name="trophy" size={16} color="#34d399" />
             <Text className="text-emerald-400 font-medium text-sm">Challenges</Text>
@@ -645,8 +558,7 @@ export default function HabitsScreen() {
           {/* Timer Button */}
           <Pressable
             className="flex-row items-center space-x-2 px-3 py-2 rounded-lg bg-rose-400/10 active:bg-rose-400/20"
-            // TODO: Implement timer modal
-            onPress={() => Alert.alert('Coming Soon', 'Focus timer feature will be available soon!')}
+            onPress={() => router.push('/focus')}
           >
             <Ionicons name="timer" size={16} color="#fb7185" />
             <Text className="text-rose-400 font-medium text-sm">Timer</Text>
@@ -789,7 +701,7 @@ export default function HabitsScreen() {
                         end={{ x: 1, y: 1 }}
                         className="w-12 h-12 rounded-xl items-center justify-center mr-4"
                       >
-                        <Ionicons name="checkmark" size={28} color="#fff" />
+                        <Ionicons name="checkmark" size={28} color="#ffffff" />
                       </LinearGradient>
                     </Pressable>
                   ) : (
@@ -953,141 +865,17 @@ export default function HabitsScreen() {
             {/* Modal Header */}
             <View className="flex-row items-center justify-between mb-4">
               <Text style={{ color: colors.text }} className="text-xl font-bold">
-                {showTemplates ? 'Choose Template' : showAIGenerator ? 'AI Habit Generator' : 'New Habit'}
+                {showTemplates ? 'Choose Template' : 'New Habit'}
               </Text>
               <Pressable onPress={() => {
                 setShowTemplates(false);
-                setShowAIGenerator(false);
-                setAISuggestions([]);
-                setAIPrompt('');
                 setIsModalOpen(false);
               }}>
                 <Ionicons name="close" size={24} color={colors.textMuted} />
               </Pressable>
             </View>
 
-            {showAIGenerator ? (
-              /* AI Habit Generator */
-              <ScrollView showsVerticalScrollIndicator={false} className="max-h-[500px]">
-                {aiSuggestions.length === 0 ? (
-                  <>
-                    <View className="bg-gradient-to-r from-purple-500/20 to-blue-500/20 rounded-xl p-4 mb-4 border border-purple-500/30">
-                      <View className="flex-row items-center mb-2">
-                        <Ionicons name="sparkles" size={20} color="#a855f7" />
-                        <Text className="text-white font-semibold ml-2">AI-Powered Suggestions</Text>
-                      </View>
-                      <Text className="text-zinc-400 text-sm">
-                        Describe your goals or lifestyle, and AI will suggest personalized habits for you.
-                      </Text>
-                    </View>
-
-                    <Text className="text-sm font-medium text-zinc-400 mb-2">What habits would you like to build?</Text>
-                    <TextInput
-                      style={{ backgroundColor: colors.backgroundSecondary, borderColor: colors.border, color: colors.text }}
-                      className="border rounded-xl px-4 py-3 text-base mb-4 min-h-[100px]"
-                      placeholder="e.g., I want to be healthier and more productive. I work from home and want to establish a morning routine."
-                      placeholderTextColor={colors.textMuted}
-                      value={aiPrompt}
-                      onChangeText={setAIPrompt}
-                      multiline
-                      textAlignVertical="top"
-                    />
-
-                    <Pressable
-                      onPress={handleGenerateWithAI}
-                      disabled={aiGenerating || !aiPrompt.trim()}
-                      className={`rounded-xl py-4 items-center mb-4 flex-row justify-center ${aiGenerating || !aiPrompt.trim() ? '' : 'bg-gradient-to-r'}`}
-                      style={{ backgroundColor: aiGenerating || !aiPrompt.trim() ? colors.backgroundTertiary : '#8b5cf6' }}
-                    >
-                      {aiGenerating ? (
-                        <>
-                          <ActivityIndicator color="#fff" />
-                          <Text className="text-white font-bold text-base ml-2">Generating...</Text>
-                        </>
-                      ) : (
-                        <>
-                          <Ionicons name="sparkles" size={20} color="#fff" />
-                          <Text className="text-white font-bold text-base ml-2">Generate Habits</Text>
-                        </>
-                      )}
-                    </Pressable>
-
-                    {!isSignedIn && (
-                      <View className="bg-indigo-500/10 rounded-xl p-3 mb-4 border border-indigo-500/20">
-                        <Text className="text-indigo-400 text-sm text-center">
-                          Offline Mode: Using local AI pattern matching
-                        </Text>
-                      </View>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <Text className="text-zinc-400 text-sm mb-3">
-                      Select habits to add to your list:
-                    </Text>
-                    {aiSuggestions.map((suggestion, index) => (
-                      <View
-                        key={index}
-                        style={{ backgroundColor: colors.backgroundSecondary, borderColor: colors.border }}
-                        className="rounded-xl p-4 mb-3 border"
-                      >
-                        <View className="flex-row items-start">
-                          <View
-                            className="w-4 h-4 rounded-full mt-1 mr-3"
-                            style={{ backgroundColor: suggestion.color }}
-                          />
-                          <View className="flex-1">
-                            <Text style={{ color: colors.text }} className="font-medium">{suggestion.title}</Text>
-                            <Text style={{ color: colors.textSecondary }} className="text-xs mt-1">{suggestion.description}</Text>
-                            <View className="flex-row items-center mt-2">
-                              <View style={{ backgroundColor: colors.backgroundTertiary }} className="px-2 py-1 rounded-full mr-2">
-                                <Text style={{ color: colors.textMuted }} className="text-xs">{suggestion.category}</Text>
-                              </View>
-                              <View style={{ backgroundColor: colors.backgroundTertiary }} className="px-2 py-1 rounded-full">
-                                <Text style={{ color: colors.textMuted }} className="text-xs">
-                                  {suggestion.goalType === 'binary' ? 'Yes/No' :
-                                    suggestion.goalType === 'duration' ? `${suggestion.goalTarget} ${suggestion.unit}` :
-                                      `${suggestion.goalTarget} ${suggestion.unit}`}
-                                </Text>
-                              </View>
-                            </View>
-                          </View>
-                          <Pressable
-                            onPress={() => handleAddAISuggestion(suggestion)}
-                            disabled={createHabit.isPending}
-                            className="bg-green-500 px-3 py-2 rounded-lg ml-2"
-                          >
-                            {createHabit.isPending ? (
-                              <ActivityIndicator color="#fff" size="small" />
-                            ) : (
-                              <Ionicons name="add" size={18} color="#fff" />
-                            )}
-                          </Pressable>
-                        </View>
-                      </View>
-                    ))}
-                    <Pressable
-                      onPress={() => {
-                        setAISuggestions([]);
-                        setAIPrompt('');
-                      }}
-                      style={{ backgroundColor: colors.backgroundSecondary }}
-                      className="rounded-xl py-3 items-center mt-2 mb-4"
-                    >
-                      <Text style={{ color: colors.textMuted }}>Generate new suggestions</Text>
-                    </Pressable>
-                  </>
-                )}
-
-                <Pressable
-                  onPress={() => setShowAIGenerator(false)}
-                  style={{ backgroundColor: colors.backgroundSecondary }}
-                  className="rounded-xl py-3 items-center mb-4"
-                >
-                  <Text style={{ color: colors.textMuted }}>Back to manual creation</Text>
-                </Pressable>
-              </ScrollView>
-            ) : showTemplates ? (
+            {showTemplates ? (
               /* Template Picker */
               <ScrollView showsVerticalScrollIndicator={false} className="max-h-[500px]">
                 {/* Template Categories */}
@@ -1168,13 +956,6 @@ export default function HabitsScreen() {
                   >
                     <Ionicons name="flash" size={18} color="#f59e0b" />
                     <Text style={{ color: colors.text }} className="ml-2 text-sm">Templates</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => setShowAIGenerator(true)}
-                    className="flex-1 bg-purple-500/10 border border-purple-500/20 rounded-xl px-4 py-3 flex-row items-center justify-center"
-                  >
-                    <Ionicons name="sparkles" size={18} color="#a855f7" />
-                    <Text className="text-purple-500 ml-2 text-sm font-medium">AI Generate</Text>
                   </Pressable>
                 </View>
 
@@ -1275,7 +1056,7 @@ export default function HabitsScreen() {
                       style={{ backgroundColor: color }}
                     >
                       {selectedColor === color && (
-                        <Ionicons name="checkmark" size={20} color="#fff" />
+                        <Ionicons name="checkmark" size={20} color="#ffffff" />
                       )}
                     </Pressable>
                   ))}

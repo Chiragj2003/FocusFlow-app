@@ -11,7 +11,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { notificationsManager } from '@/lib/notifications';
 import { useHabits, useInsights, useStreaks } from '../../lib/hooks';
-import { guestStorage } from '../../lib/localStorage';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://focus-flow-web-weld.vercel.app';
 const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL || API_URL;
@@ -19,7 +18,7 @@ const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL || API_URL;
 export default function SettingsScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { signOut, isSignedIn } = useAuth();
+  const { signOut, isSignedIn, getToken } = useAuth();
   const { user } = useUser();
   const { isDark, mode, setMode, colors } = useTheme();
   const [notifications, setNotifications] = useState(true);
@@ -48,7 +47,7 @@ export default function SettingsScreen() {
     setNotifications(value);
     try {
       await AsyncStorage.setItem('@focusflow_settings_notifications', String(value));
-      await notificationsManager.updateScheduledReminders();
+      await notificationsManager.updateScheduledReminders('settings: notifications toggled');
     } catch (error) {
       console.error('Failed to save notification settings:', error);
     }
@@ -58,7 +57,7 @@ export default function SettingsScreen() {
     setDailyReminder(value);
     try {
       await AsyncStorage.setItem('@focusflow_settings_daily_reminder', String(value));
-      await notificationsManager.updateScheduledReminders();
+      await notificationsManager.updateScheduledReminders('settings: daily reminder toggled');
     } catch (error) {
       console.error('Failed to save daily reminder settings:', error);
     }
@@ -84,13 +83,9 @@ export default function SettingsScreen() {
   const currentStreak = streaks?.currentStreak || 0;
   const completionRate = insights?.overallCompletionRate || 0;
 
-  // Get user info - show Guest if not signed in
-  const userName = isSignedIn
-    ? (user?.firstName || user?.emailAddresses?.[0]?.emailAddress?.split('@')[0] || 'User')
-    : 'Guest User';
-  const userEmail = isSignedIn
-    ? (user?.emailAddresses?.[0]?.emailAddress || '')
-    : 'Data stored locally on device';
+  // Get user info
+  const userName = user?.firstName || user?.emailAddresses?.[0]?.emailAddress?.split('@')[0] || 'User';
+  const userEmail = user?.emailAddresses?.[0]?.emailAddress || '';
 
   const handleLogout = () => {
     Alert.alert(
@@ -103,11 +98,18 @@ export default function SettingsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              await signOut();
+              // Clear all caches first
               queryClient.clear();
+              
+              // Sign out from Clerk
+              await signOut();
+              
+              // Force navigate to sign-in screen
+              router.replace('/(auth)/sign-in');
             } catch (error) {
               console.error('Error signing out:', error);
-              Alert.alert('Error', 'Failed to sign out. Please try again.');
+              // Even if signOut fails, still redirect
+              router.replace('/(auth)/sign-in');
             }
           }
         }
@@ -115,44 +117,94 @@ export default function SettingsScreen() {
     );
   };
 
-  const handleSignIn = () => {
-    router.push('/(auth)/sign-in');
-  };
-
-  const handleClearLocalData = () => {
-    Alert.alert(
-      'Clear Local Data',
-      'This will delete all habits and entries stored on this device. This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear Data',
-          style: 'destructive',
-          onPress: async () => {
-            await guestStorage.clearGuestData();
-            queryClient.clear();
-            Alert.alert('Success', 'Local data has been cleared.');
-          }
-        }
-      ]
-    );
-  };
-
   const handleDeleteAccount = () => {
+    if (!isSignedIn) return;
+    
     Alert.alert(
       'Delete Account',
-      'This action cannot be undone. All your data will be permanently deleted.',
+      'This action is PERMANENT and cannot be undone. All your habits, entries, focus sessions, and account data will be permanently deleted.\n\nType "delete my account" to confirm.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete',
+          text: 'Delete Forever',
           style: 'destructive',
-          onPress: () => {
-            Alert.alert('Contact Support', 'Please contact support to delete your account.');
-          }
-        }
+          onPress: async () => {
+            try {
+              const token = await getToken();
+              if (!token) {
+                Alert.alert('Error', 'Authentication failed. Please try again.');
+                return;
+              }
+
+              // Call backend to delete Supabase data + Clerk user
+              const response = await fetch(`${API_URL}/api/account/delete`, {
+                method: 'DELETE',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ confirmation: 'delete my account' }),
+              });
+
+              if (!response.ok) {
+                const data = await response.json().catch(() => ({}));
+                throw new Error(data.error || 'Failed to delete account');
+              }
+              
+              // Clear React Query cache
+              queryClient.clear();
+
+              // Sign out (Clerk session)
+              try {
+                await signOut();
+              } catch (e) {
+                // Clerk user is already deleted, sign out may fail - that's ok
+              }
+
+              // Navigate to sign-in
+              router.replace('/(auth)/sign-in');
+            } catch (error: any) {
+              console.error('Account deletion error:', error);
+              Alert.alert('Error', error.message || 'Failed to delete account. Please try again.');
+            }
+          },
+        },
       ]
     );
+  };
+
+  const handleWebHandoff = async (path: string = '/') => {
+    if (!isSignedIn) {
+      Linking.openURL(`${WEB_URL}${path}`);
+      return;
+    }
+    
+    try {
+      const token = await getToken();
+      if (!token) throw new Error("No token available");
+
+      const response = await fetch(`${API_URL}/api/auth/mobile-handoff`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error("Handoff failed");
+      }
+
+      const data = await response.json();
+      if (data.url) {
+        Linking.openURL(data.url);
+      } else {
+        Linking.openURL(`${WEB_URL}${path}`);
+      }
+    } catch (error) {
+      console.warn('Seamless web handoff failed, falling back to manual redirect:', error);
+      Linking.openURL(`${WEB_URL}${path}`);
+    }
   };
 
   const handleExportData = () => {
@@ -161,13 +213,13 @@ export default function SettingsScreen() {
       'Your habit data will be prepared for export. This feature opens the web app.',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Open Web App', onPress: () => Linking.openURL(`${WEB_URL}/settings`) }
+        { text: 'Open Web App', onPress: () => handleWebHandoff('/settings') }
       ]
     );
   };
 
   return (
-    <SafeAreaView style={{ backgroundColor: colors.background }} className="flex-1">
+    <SafeAreaView edges={['top']} style={{ backgroundColor: colors.background }} className="flex-1">
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <ScrollView className="flex-1 px-4" showsVerticalScrollIndicator={false}>
         {/* Header - Web Aligned */}
@@ -198,23 +250,12 @@ export default function SettingsScreen() {
               <Text style={{ color: colors.text }} className="text-xl font-bold">{userName}</Text>
               <Text style={{ color: colors.textMuted }} className="text-sm">{userEmail}</Text>
             </View>
-            {isSignedIn ? (
-              <Pressable
-                className="p-2"
-                onPress={() => Linking.openURL(`${WEB_URL}/settings`)}
-              >
-                <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-              </Pressable>
-            ) : (
-              <Pressable onPress={handleSignIn}>
-                <View
-                  style={{ backgroundColor: colors.primary }}
-                  className="px-5 py-2.5 rounded-xl"
-                >
-                  <Text className="text-white font-bold">Sign In</Text>
-                </View>
-              </Pressable>
-            )}
+            <Pressable
+              className="p-2"
+              onPress={() => handleWebHandoff('/settings')}
+            >
+              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+            </Pressable>
           </View>
 
         </View>
@@ -323,7 +364,7 @@ export default function SettingsScreen() {
               icon="cloud-upload-outline"
               title="Sync with Web"
               subtitle="Open FocusFlow web app"
-              onPress={() => Linking.openURL(WEB_URL)}
+              onPress={() => handleWebHandoff('/')}
               isDark={isDark}
               colors={colors}
             />
@@ -356,7 +397,7 @@ export default function SettingsScreen() {
               icon="globe-outline"
               title="Visit Website"
               subtitle="Open FocusFlow web"
-              onPress={() => Linking.openURL(WEB_URL)}
+              onPress={() => handleWebHandoff('/')}
               isDark={isDark}
               colors={colors}
             />
@@ -387,62 +428,29 @@ export default function SettingsScreen() {
 
         {/* Account Actions */}
         <View className="mt-6">
-          {isSignedIn ? (
-            <>
-              <Pressable
-                onPress={handleLogout}
-                style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-                className="rounded-2xl border p-4 flex-row items-center justify-center"
-              >
-                <Ionicons name="log-out-outline" size={20} color="#f97316" />
-                <Text className="text-orange-500 font-medium ml-2">Sign Out</Text>
-              </Pressable>
+          <Pressable
+            onPress={handleLogout}
+            style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+            className="rounded-2xl border p-4 flex-row items-center justify-center"
+          >
+            <Ionicons name="log-out-outline" size={20} color="#f97316" />
+            <Text className="text-orange-500 font-medium ml-2">Sign Out</Text>
+          </Pressable>
 
-              <Pressable
-                onPress={handleDeleteAccount}
-                className="mt-3 bg-red-500/10 rounded-2xl border border-red-500/20 p-4 flex-row items-center justify-center"
-              >
-                <Ionicons name="trash-outline" size={20} color="#ef4444" />
-                <Text className="text-red-500 font-medium ml-2">Delete Account</Text>
-              </Pressable>
-            </>
-          ) : (
-            <>
-              {/* Guest Mode Info Banner */}
-              <View className="bg-amber-500/10 rounded-2xl border border-amber-500/20 p-4 mb-3">
-                <View className="flex-row items-center mb-2">
-                  <Ionicons name="information-circle" size={20} color="#f59e0b" />
-                  <Text className="text-amber-500 font-medium ml-2">Guest Mode</Text>
-                </View>
-                <Text style={{ color: colors.textMuted }} className="text-sm">
-                  Your data is stored locally on this device. Sign in to sync across devices and back up to the cloud.
-                </Text>
-              </View>
-
-              <Pressable
-                onPress={handleSignIn}
-                className="bg-orange-500 rounded-2xl p-4 flex-row items-center justify-center"
-              >
-                <Ionicons name="log-in-outline" size={20} color="#ffffff" />
-                <Text className="text-white font-medium ml-2">Sign In to Sync Data</Text>
-              </Pressable>
-
-              <Pressable
-                onPress={handleClearLocalData}
-                className="mt-3 bg-red-500/10 rounded-2xl border border-red-500/20 p-4 flex-row items-center justify-center"
-              >
-                <Ionicons name="trash-outline" size={20} color="#ef4444" />
-                <Text className="text-red-500 font-medium ml-2">Clear Local Data</Text>
-              </Pressable>
-            </>
-          )}
+          <Pressable
+            onPress={handleDeleteAccount}
+            className="mt-3 bg-red-500/10 rounded-2xl border border-red-500/20 p-4 flex-row items-center justify-center"
+          >
+            <Ionicons name="trash-outline" size={20} color="#ef4444" />
+            <Text className="text-red-500 font-medium ml-2">Delete Account</Text>
+          </Pressable>
         </View>
 
         {/* App Version */}
         <View className="mt-6 mb-8 items-center">
           <Text style={{ color: colors.textMuted }} className="text-sm">FocusFlow v1.0.0</Text>
           <Text style={{ color: colors.textMuted }} className="text-xs mt-1 opacity-70">
-            {isSignedIn ? `Synced with ${API_URL.replace('https://', '')}` : 'Data stored locally'}
+            Synced with {API_URL.replace('https://', '')}
           </Text>
         </View>
       </ScrollView>

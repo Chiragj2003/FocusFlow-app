@@ -207,7 +207,7 @@ export default function AchievementsScreen() {
   );
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.background }}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       
       {/* Header */}
@@ -271,7 +271,7 @@ export default function AchievementsScreen() {
           <View className="pb-8">
             {available.length === 0 ? (
               <View className="py-12 items-center">
-                <Ionicons name="star-outline" size={48} color={colors.textMuted} className="mb-4 opacity-50" />
+                <Ionicons name="star-outline" size={48} color={colors.textMuted} style={{ marginBottom: 16, opacity: 0.5 }} />
                 <Text style={{ color: colors.text }} className="text-lg font-bold mb-2">You're a legend!</Text>
                 <Text style={{ color: colors.textMuted }} className="text-center">You've joined every single achievement available.</Text>
               </View>
@@ -290,7 +290,7 @@ export default function AchievementsScreen() {
           <View className="pb-8">
             {joined.length === 0 ? (
               <View className="py-12 items-center">
-                <Ionicons name="rocket-outline" size={48} color={colors.textMuted} className="mb-4 opacity-50" />
+                <Ionicons name="rocket-outline" size={48} color={colors.textMuted} style={{ marginBottom: 16, opacity: 0.5 }} />
                 <Text style={{ color: colors.text }} className="text-lg font-bold mb-2">No achievements joined</Text>
                 <Text style={{ color: colors.textMuted }} className="text-center">Join some achievements to push your limits and earn XP!</Text>
               </View>

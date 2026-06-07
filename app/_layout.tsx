@@ -9,8 +9,15 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import { LogBox } from 'react-native';
 import 'react-native-reanimated';
 import '../global.css';
+
+// Suppress third-party Reanimated v4 transition warnings
+LogBox.ignoreLogs([
+  'Reading from value during component render',
+  'Writing to value during component render',
+]);
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();

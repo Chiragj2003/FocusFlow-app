@@ -6,19 +6,15 @@ import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Dimensions,
   Pressable,
   RefreshControl,
   ScrollView,
   Text,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Circle, G, Line, Path, Text as SvgText } from 'react-native-svg';
-
-const screenWidth = Dimensions.get('window').width;
-const chartWidth = screenWidth - 64;
-const chartHeight = 180;
+import Svg, { Circle, G, Line, Path, Rect, Text as SvgText, Defs, LinearGradient, Stop } from 'react-native-svg';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = [
@@ -28,6 +24,14 @@ const MONTHS = [
 
 export default function InsightsScreen() {
   const { isDark, colors } = useTheme();
+  const { width: windowWidth } = useWindowDimensions();
+  const chartWidth = windowWidth - 64;
+  const chartHeight = 180;
+  const paddingLeft = 70;
+  const paddingRight = 20;
+  const graphWidth = chartWidth - paddingLeft - paddingRight;
+  const graphHeight = chartHeight - 60;
+
   const [activeTab, setActiveTab] = useState<'insights' | 'calendar'>('insights');
   const [refreshing, setRefreshing] = useState(false);
 
@@ -65,11 +69,12 @@ export default function InsightsScreen() {
     setRefreshing(false);
   }, [refetchInsights, refetchStreaks, refetchHabits, refetchEntries]);
 
+  const totalHabitsCount = habits?.length || 0;
+  
   // === Insights Processing ===
   const monthlyCompletion = insights?.overallCompletionRate ? Math.round(insights.overallCompletionRate * 100) : 0;
   const totalCompletions = insights?.totalCompleted || 0;
   const perfectDays = insights?.weekly?.filter((d: WeeklyDataType) => d.rate === 1).length || 0;
-  const totalHabitsCount = habits?.length || 0;
 
   const bestDayOfWeek = useMemo(() => {
     if (!entries || entries.length === 0) return 'None';
@@ -85,12 +90,46 @@ export default function InsightsScreen() {
   }, [entries]);
 
   const weeklyData = useMemo(() => {
-    return insights?.weekly?.map((w: WeeklyDataType) => ({
-      day: w.day || '',
-      value: typeof w.rate === 'number' && !isNaN(w.rate) ? Math.round(w.rate * 100) : 0,
-    })) || [];
-  }, [insights]);
+    if (!entries || !habits || habits.length === 0) return [];
+    const activeHabits = habits.filter((h: any) => h.active !== false);
+    const activeHabitsCount = activeHabits.length || 1;
+    const activeHabitIds = new Set(activeHabits.map((h: any) => h.id));
+    const days = [];
+    for(let i=6; i>=0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateStr = formatDate(d);
+      const dayName = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()];
+      
+      const dayEntries = entries.filter((e: any) => e.entryDate === dateStr && e.completed && activeHabitIds.has(e.habitId));
+      const uniqueCompletions = new Set(dayEntries.map((e: any) => e.habitId));
+      const rate = uniqueCompletions.size / activeHabitsCount;
+      
+      days.push({ 
+        day: dayName, 
+        value: Math.min(Math.round(rate * 100), 100) 
+      });
+    }
+    return days;
+  }, [entries, habits]);
   const maxBarValue = Math.max(...weeklyData.map((d: any) => d.value), 100);
+
+  const dailyData = useMemo(() => {
+    if (!entries || !habits || habits.length === 0) return [];
+    const activeHabitIds = new Set(habits.filter((h: any) => h.active !== false).map((h: any) => h.id));
+    const days = [];
+    for(let i=6; i>=0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateStr = formatDate(d);
+      const dayName = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()];
+      const dayEntries = entries.filter((e: any) => e.entryDate === dateStr && e.completed && activeHabitIds.has(e.habitId));
+      const uniqueCompletions = new Set(dayEntries.map((e: any) => e.habitId));
+      days.push({ day: dayName, value: uniqueCompletions.size });
+    }
+    return days;
+  }, [entries, habits]);
+  const maxDailyValue = Math.max(...dailyData.map((d: any) => d.value), 4);
 
   const topHabits = useMemo(() => {
     return streaks?.streaksByHabit?.slice(0, 5).map((h: HabitStreak) => ({
@@ -124,13 +163,10 @@ export default function InsightsScreen() {
 
   const lineChartPath = useMemo(() => {
     if (weeklyData.length === 0) return '';
-    const padding = 20;
-    const graphWidth = chartWidth - padding * 2;
-    const graphHeight = chartHeight - 60;
     const stepX = graphWidth / (weeklyData.length - 1 || 1);
     let path = '';
     weeklyData.forEach((point: any, index: number) => {
-      const x = padding + index * stepX;
+      const x = paddingLeft + index * stepX;
       const pointVal = typeof point.value === 'number' && !isNaN(point.value) ? point.value : 0;
       const maxVal = maxBarValue > 0 ? maxBarValue : 100;
       const y = graphHeight - (pointVal / maxVal) * graphHeight + 20;
@@ -138,25 +174,22 @@ export default function InsightsScreen() {
       else {
         const prevPoint = weeklyData[index - 1];
         const prevPointVal = typeof prevPoint.value === 'number' && !isNaN(prevPoint.value) ? prevPoint.value : 0;
-        const prevX = padding + (index - 1) * stepX;
+        const prevX = paddingLeft + (index - 1) * stepX;
         const prevY = graphHeight - (prevPointVal / maxVal) * graphHeight + 20;
         const cpX = (prevX + x) / 2;
         path += ` C ${cpX} ${prevY}, ${cpX} ${y}, ${x} ${y}`;
       }
     });
     return path;
-  }, [weeklyData, maxBarValue]);
+  }, [weeklyData, maxBarValue, graphWidth, graphHeight, paddingLeft]);
 
   const areaPath = useMemo(() => {
     if (weeklyData.length === 0) return '';
-    const padding = 20;
-    const graphWidth = chartWidth - padding * 2;
-    const graphHeight = chartHeight - 60;
     const stepX = graphWidth / (weeklyData.length - 1 || 1);
     const baseY = graphHeight + 20;
-    let path = `M ${padding} ${baseY}`;
+    let path = `M ${paddingLeft} ${baseY}`;
     weeklyData.forEach((point: any, index: number) => {
-      const x = padding + index * stepX;
+      const x = paddingLeft + index * stepX;
       const pointVal = typeof point.value === 'number' && !isNaN(point.value) ? point.value : 0;
       const maxVal = maxBarValue > 0 ? maxBarValue : 100;
       const y = graphHeight - (pointVal / maxVal) * graphHeight + 20;
@@ -164,15 +197,15 @@ export default function InsightsScreen() {
       else {
         const prevPoint = weeklyData[index - 1];
         const prevPointVal = typeof prevPoint.value === 'number' && !isNaN(prevPoint.value) ? prevPoint.value : 0;
-        const prevX = padding + (index - 1) * stepX;
+        const prevX = paddingLeft + (index - 1) * stepX;
         const prevY = graphHeight - (prevPointVal / maxVal) * graphHeight + 20;
         const cpX = (prevX + x) / 2;
         path += ` C ${cpX} ${prevY}, ${cpX} ${y}, ${x} ${y}`;
       }
     });
-    path += ` L ${padding + (weeklyData.length - 1) * stepX} ${baseY} Z`;
+    path += ` L ${paddingLeft + (weeklyData.length - 1) * stepX} ${baseY} Z`;
     return path;
-  }, [weeklyData, maxBarValue]);
+  }, [weeklyData, maxBarValue, graphWidth, graphHeight, paddingLeft]);
 
   // === Calendar Processing ===
   const calendarDays = useMemo(() => {
@@ -228,22 +261,18 @@ export default function InsightsScreen() {
     return colors.success + '60';
   };
 
-  const handleToggleHabit = async (habitId: string, completed: boolean) => {
-    if (!selectedDate) return;
-    try { await toggleEntry.mutateAsync({ habitId, entryDate: selectedDate, completed: !completed }); } 
-    catch (error) { console.error('Failed to toggle habit:', error); }
-  };
+  // Calendar is read-only, habit toggling removed
 
   if (isLoading && !refreshing) {
     return (
-      <SafeAreaView style={{ backgroundColor: colors.background }} className="flex-1 items-center justify-center">
+      <SafeAreaView edges={['top']} style={{ backgroundColor: colors.background }} className="flex-1 items-center justify-center">
         <ActivityIndicator size="large" color={colors.primary} />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={{ backgroundColor: colors.background }} className="flex-1">
+    <SafeAreaView edges={['top']} style={{ backgroundColor: colors.background }} className="flex-1">
       <StatusBar style={isDark ? 'light' : 'dark'} />
       
       {/* Header and Toggle */}
@@ -280,52 +309,103 @@ export default function InsightsScreen() {
           /* INSIGHTS TAB */
           <View>
             <View className="flex-row justify-between gap-3 mt-4">
-              <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="flex-1 rounded-xl border p-4 items-center">
+              <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="flex-1 rounded-xl border p-4 items-center min-h-[110px] justify-center">
                 <View className="w-8 h-8 rounded-full bg-emerald-500/10 items-center justify-center mb-2">
                   <Ionicons name="checkmark-circle" size={18} color="#10b981" />
                 </View>
-                <Text style={{ color: colors.text }} className="text-2xl font-bold">{monthlyCompletion}%</Text>
-                <Text style={{ color: colors.textMuted }} className="text-xs mt-1">Success</Text>
+                <Text style={{ color: colors.text }} className="text-2xl font-bold text-center">{monthlyCompletion}%</Text>
+                <Text style={{ color: colors.textMuted }} className="text-xs mt-1 text-center">Success Rate</Text>
               </View>
-              <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="flex-1 rounded-xl border p-4 items-center">
+              <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="flex-1 rounded-xl border p-4 items-center min-h-[110px] justify-center">
                 <View className="w-8 h-8 rounded-full bg-blue-500/10 items-center justify-center mb-2">
                   <Ionicons name="ribbon" size={18} color="#3b82f6" />
                 </View>
-                <Text style={{ color: colors.text }} className="text-2xl font-bold">{totalCompletions}</Text>
-                <Text style={{ color: colors.textMuted }} className="text-xs mt-1">Total</Text>
+                <Text style={{ color: colors.text }} className="text-2xl font-bold text-center">{totalCompletions}</Text>
+                <Text style={{ color: colors.textMuted }} className="text-xs mt-1 text-center">Total Completions</Text>
               </View>
-              <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="flex-1 rounded-xl border p-4 items-center">
+              <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="flex-1 rounded-xl border p-4 items-center min-h-[110px] justify-center">
                 <View className="w-8 h-8 rounded-full bg-amber-500/10 items-center justify-center mb-2">
                   <Ionicons name="star" size={18} color="#f59e0b" />
                 </View>
-                <Text style={{ color: colors.text }} className="text-2xl font-bold">{perfectDays}</Text>
-                <Text style={{ color: colors.textMuted }} className="text-xs mt-1">Perfect</Text>
+                <Text style={{ color: colors.text }} className="text-2xl font-bold text-center">{perfectDays}</Text>
+                <Text style={{ color: colors.textMuted }} className="text-xs mt-1 text-center">Perfect Days</Text>
               </View>
             </View>
 
             {/* Second row of Stats */}
             <View className="flex-row justify-between gap-3 mt-3">
-              <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="flex-1 rounded-xl border p-4 items-center">
+              <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="flex-1 rounded-xl border p-4 items-center min-h-[110px] justify-center">
                 <View className="w-8 h-8 rounded-full bg-purple-500/10 items-center justify-center mb-2">
                   <Ionicons name="calendar-outline" size={18} color="#a855f7" />
                 </View>
-                <Text style={{ color: colors.text }} className="text-xl font-bold">{bestDayOfWeek}</Text>
-                <Text style={{ color: colors.textMuted }} className="text-xs mt-1">Best Day</Text>
+                <Text style={{ color: colors.text }} className="text-2xl font-bold text-center">{bestDayOfWeek}</Text>
+                <Text style={{ color: colors.textMuted }} className="text-xs mt-1 text-center">Best Day</Text>
               </View>
-              <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="flex-1 rounded-xl border p-4 items-center">
+              <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="flex-1 rounded-xl border p-4 items-center min-h-[110px] justify-center">
                 <View className="w-8 h-8 rounded-full bg-rose-500/10 items-center justify-center mb-2">
                   <Ionicons name="trending-up" size={18} color="#f43f5e" />
                 </View>
-                <Text style={{ color: colors.text }} className="text-xl font-bold">{totalHabitsCount}</Text>
-                <Text style={{ color: colors.textMuted }} className="text-xs mt-1">Active Habits</Text>
+                <Text style={{ color: colors.text }} className="text-2xl font-bold text-center">{totalHabitsCount}</Text>
+                <Text style={{ color: colors.textMuted }} className="text-xs mt-1 text-center">Active Habits</Text>
               </View>
-              <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="flex-1 rounded-xl border p-4 items-center">
+              <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="flex-1 rounded-xl border p-4 items-center min-h-[110px] justify-center">
                 <View className="w-8 h-8 rounded-full bg-cyan-500/10 items-center justify-center mb-2">
                   <Ionicons name="checkmark-done" size={18} color="#06b6d4" />
                 </View>
-                <Text style={{ color: colors.text }} className="text-xl font-bold">{entries?.filter((e: any) => e.completed).length || 0}</Text>
-                <Text style={{ color: colors.textMuted }} className="text-xs mt-1">This Month</Text>
+                <Text style={{ color: colors.text }} className="text-2xl font-bold text-center">{entries?.filter((e: any) => e.completed).length || 0}</Text>
+                <Text style={{ color: colors.textMuted }} className="text-xs mt-1 text-center">This Month</Text>
               </View>
+            </View>
+
+            {/* Daily Trend Bar Chart */}
+            <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="mt-4 rounded-2xl border p-4">
+              <View className="flex-row items-center justify-between mb-4">
+                <Text style={{ color: colors.text }} className="text-base font-bold">Daily Trend</Text>
+                <View className="flex-row items-center">
+                  <View className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: colors.info }} />
+                  <Text style={{ color: colors.textMuted }} className="text-xs">Completions</Text>
+                </View>
+              </View>
+              {dailyData.length > 0 ? (
+                <Svg width={chartWidth} height={chartHeight - 40}>
+                  {[0, Math.ceil(maxDailyValue/2), maxDailyValue].map((val, i) => {
+                    const y = (chartHeight - 100) - (val / maxDailyValue) * (chartHeight - 100) + 20;
+                    return (
+                      <G key={i}>
+                        <Line x1={paddingLeft} y1={y} x2={chartWidth - paddingRight} y2={y} stroke={colors.border + '50'} strokeWidth={1} strokeDasharray="4,4" />
+                        <SvgText x={paddingLeft - 15} y={y + 4} fontSize={10} fill={colors.textMuted} fontWeight="600" textAnchor="end">{val}</SvgText>
+                      </G>
+                    );
+                  })}
+                  {/* Baseline and Y axis separator */}
+                  <Line x1={paddingLeft} y1={20} x2={paddingLeft} y2={chartHeight - 80} stroke={colors.border} strokeWidth={1.5} />
+                  <Line x1={paddingLeft} y1={chartHeight - 80} x2={chartWidth - paddingRight} y2={chartHeight - 80} stroke={colors.border} strokeWidth={1.5} />
+
+                  {dailyData.map((point: any, index: number) => {
+                    const stepX = graphWidth / (dailyData.length - 1 || 1);
+                    const x = paddingLeft + index * stepX;
+                    const barHeight = (point.value / maxDailyValue) * (chartHeight - 100);
+                    const y = (chartHeight - 100) - barHeight + 20;
+                    const barWidth = 14;
+                    const isZero = point.value === 0;
+                    return (
+                      <G key={index}>
+                        {isZero ? (
+                          <Rect x={x - barWidth / 2} y={chartHeight - 80 - 4} width={barWidth} height={4} rx={2} fill={isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)'} />
+                        ) : (
+                          <Rect x={x - barWidth / 2} y={y} width={barWidth} height={Math.max(barHeight, 4)} rx={4} fill={colors.info} />
+                        )}
+                        <SvgText x={x} y={chartHeight - 50} fontSize={10} fill={colors.textMuted} fontWeight="bold" textAnchor="middle">{point.day}</SvgText>
+                      </G>
+                    );
+                  })}
+                </Svg>
+              ) : (
+                <View style={{ height: chartHeight - 40 }} className="items-center justify-center">
+                  <Ionicons name="stats-chart" size={48} color={colors.textMuted} />
+                  <Text style={{ color: colors.textMuted }} className="mt-2">No data available yet</Text>
+                </View>
+              )}
             </View>
 
             {/* Weekly Trend Line Chart */}
@@ -339,28 +419,35 @@ export default function InsightsScreen() {
               </View>
               {weeklyData.length > 0 ? (
                 <Svg width={chartWidth} height={chartHeight}>
+                  <Defs>
+                    <LinearGradient id="gradientArea" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <Stop offset="0%" stopColor={colors.primary} stopOpacity="0.4" />
+                      <Stop offset="100%" stopColor={colors.backgroundSecondary} stopOpacity="0.0" />
+                    </LinearGradient>
+                  </Defs>
                   {[0, 25, 50, 75, 100].map((val, i) => {
                     const y = (chartHeight - 60) - (val / 100) * (chartHeight - 60) + 20;
                     return (
                       <G key={i}>
-                        <Line x1={20} y1={y} x2={chartWidth - 20} y2={y} stroke={colors.border} strokeWidth={1} strokeDasharray="4,4" />
-                        <SvgText x={10} y={y + 4} fontSize={10} fill={colors.textMuted}>{val}</SvgText>
+                        <Line x1={paddingLeft} y1={y} x2={chartWidth - paddingRight} y2={y} stroke={colors.border + '50'} strokeWidth={1} strokeDasharray="4,4" />
+                        <SvgText x={paddingLeft - 15} y={y + 4} fontSize={10} fill={colors.textMuted} fontWeight="600" textAnchor="end">{val}%</SvgText>
                       </G>
                     );
                   })}
-                  <Path d={areaPath} fill={colors.primary + '20'} />
+                  {/* Baseline and Y axis separator */}
+                  <Line x1={paddingLeft} y1={20} x2={paddingLeft} y2={chartHeight - 40} stroke={colors.border} strokeWidth={1.5} />
+                  <Line x1={paddingLeft} y1={chartHeight - 40} x2={chartWidth - paddingRight} y2={chartHeight - 40} stroke={colors.border} strokeWidth={1.5} />
+
+                  <Path d={areaPath} fill="url(#gradientArea)" />
                   <Path d={lineChartPath} stroke={colors.primary} strokeWidth={3} fill="none" strokeLinecap="round" strokeLinejoin="round" />
                   {weeklyData.map((point: any, index: number) => {
-                    const padding = 20;
-                    const graphWidth = chartWidth - padding * 2;
-                    const graphHeight = chartHeight - 60;
                     const stepX = graphWidth / (weeklyData.length - 1 || 1);
-                    const x = padding + index * stepX;
+                    const x = paddingLeft + index * stepX;
                     const y = graphHeight - (point.value / maxBarValue) * graphHeight + 20;
                     return (
                       <G key={index}>
-                        <Circle cx={x} cy={y} r={6} fill={colors.background} stroke={colors.primary} strokeWidth={3} />
-                        <SvgText x={x} y={chartHeight - 10} fontSize={11} fill={colors.textMuted} textAnchor="middle">{point.day}</SvgText>
+                        <Circle cx={x} cy={y} r={5} fill={colors.background} stroke={colors.primary} strokeWidth={2.5} />
+                        <SvgText x={x} y={chartHeight - 15} fontSize={10} fill={colors.textMuted} fontWeight="bold" textAnchor="middle">{point.day}</SvgText>
                       </G>
                     );
                   })}
@@ -513,12 +600,10 @@ export default function InsightsScreen() {
                 ) : (
                   <View className="gap-2">
                     {selectedDateEntries.map(({ habit, completed }: any) => (
-                      <Pressable
+                      <View
                         key={habit.id}
-                        onPress={() => handleToggleHabit(habit.id, completed)}
-                        disabled={toggleEntry.isPending}
                         style={{ backgroundColor: completed ? colors.backgroundSecondary : colors.surface }}
-                        className="flex-row items-center p-4 rounded-xl"
+                        className="flex-row items-center p-4 rounded-xl opacity-90"
                       >
                         <View 
                           className="w-6 h-6 rounded-full border-2 items-center justify-center mr-3"
@@ -529,7 +614,7 @@ export default function InsightsScreen() {
                         <Text style={{ color: completed ? colors.textMuted : colors.text }} className="flex-1 font-medium">
                           {habit.title}
                         </Text>
-                      </Pressable>
+                      </View>
                     ))}
                   </View>
                 )}
