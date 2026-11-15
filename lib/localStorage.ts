@@ -30,8 +30,29 @@ export interface SyncAction {
   retryCount: number;
 }
 
+type SyncListener = () => void;
+
 class LocalStorageManager {
   private isSyncing = false;
+  private syncListeners = new Set<SyncListener>();
+
+  /** Subscribe to "a sync cycle sent something to the server". Returns an unsubscribe fn. */
+  onSyncComplete(listener: SyncListener): () => void {
+    this.syncListeners.add(listener);
+    return () => {
+      this.syncListeners.delete(listener);
+    };
+  }
+
+  private notifySyncComplete() {
+    this.syncListeners.forEach((listener) => {
+      try {
+        listener();
+      } catch (e) {
+        console.warn('[LocalStorage Sync] Sync listener failed:', e);
+      }
+    });
+  }
 
   // ==========================================
   // HABITS LOCAL STORAGE
@@ -355,6 +376,9 @@ class LocalStorageManager {
     await this.saveSyncQueue(remainingQueue);
     this.isSyncing = false;
     console.log(`[LocalStorage Sync] Sync cycle finished. Remaining in queue: ${remainingQueue.length}`);
+    if (remainingQueue.length < queue.length) {
+      this.notifySyncComplete();
+    }
   }
 }
 
