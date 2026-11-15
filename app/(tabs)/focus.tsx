@@ -30,11 +30,11 @@ const PRESETS = [
 
 const SOUNDS = [
   { id: 'none', label: 'None', source: null, icon: 'volume-mute-outline' },
-  { id: 'rain', label: 'Rain', source: require('@/assets/audio/rain.wav'), icon: 'water-outline' },
-  { id: 'cafe', label: 'Cafe', source: require('@/assets/audio/cafe.wav'), icon: 'cafe-outline' },
-  { id: 'ocean', label: 'Ocean Waves', source: require('@/assets/audio/ocean.wav'), icon: 'radio-outline' },
-  { id: 'forest', label: 'Forest Ambience', source: require('@/assets/audio/forest.wav'), icon: 'leaf-outline' },
-  { id: 'white_noise', label: 'White Noise', source: require('@/assets/audio/white_noise.wav'), icon: 'options-outline' },
+  { id: 'rain', label: 'Rain', source: require('@/assets/audio/rain.m4a'), icon: 'water-outline' },
+  { id: 'cafe', label: 'Cafe', source: require('@/assets/audio/cafe.m4a'), icon: 'cafe-outline' },
+  { id: 'ocean', label: 'Ocean Waves', source: require('@/assets/audio/ocean.m4a'), icon: 'radio-outline' },
+  { id: 'forest', label: 'Forest Ambience', source: require('@/assets/audio/forest.m4a'), icon: 'leaf-outline' },
+  { id: 'white_noise', label: 'White Noise', source: require('@/assets/audio/white_noise.m4a'), icon: 'options-outline' },
 ];
 
 type TimerState = 'idle' | 'running' | 'paused' | 'completed';
@@ -100,17 +100,14 @@ export default function FocusTimerScreen() {
     if (player) {
       try {
         player.pause();
-      } catch (e) { }
+      } catch (e) {
+        console.warn('Failed to pause sound:', e);
+      }
     }
   };
 
-  const unloadSound = async () => {
-    if (player) {
-      try {
-        player.pause();
-      } catch (e) { }
-    }
-  };
+  // Same as stopSound; kept as a separate name for the unmount/cleanup path.
+  const unloadSound = stopSound;
 
   // Start timer
   const startTimer = useCallback(() => {
