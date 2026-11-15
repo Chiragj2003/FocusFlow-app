@@ -10,6 +10,7 @@ import { Alert, Linking, Pressable, ScrollView, Switch, Text, View, Image } from
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { notificationsManager } from '@/lib/notifications';
+import { localStorage } from '@/lib/localStorage';
 import { useHabits, useInsights, useStreaks } from '../../lib/hooks';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://focus-flow-web-weld.vercel.app';
@@ -98,9 +99,14 @@ export default function SettingsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Clear all caches first
+              // Send any unsynced changes while we still have a token (best effort)
+              await localStorage.flush();
+
+              // Remove this user's data from the device so the next account can't see it
+              await localStorage.clearAll();
+              await notificationsManager.cancelAllReminders();
               queryClient.clear();
-              
+
               // Sign out from Clerk
               await signOut();
               
@@ -151,7 +157,9 @@ export default function SettingsScreen() {
                 throw new Error(data.error || 'Failed to delete account');
               }
               
-              // Clear React Query cache
+              // Remove all of this user's data from the device
+              await localStorage.clearAll();
+              await notificationsManager.cancelAllReminders();
               queryClient.clear();
 
               // Sign out (Clerk session)
