@@ -11,6 +11,7 @@ const STORAGE_KEYS = {
   SYNC_QUEUE: '@focusflow_sync_queue',
   LAST_SYNC: '@focusflow_last_sync_timestamp',
   ID_MAP: '@focusflow_temp_id_map',
+  OWNER: '@focusflow_local_owner',
 };
 
 const MAX_RETRIES = 5;
@@ -73,6 +74,44 @@ class LocalStorageManager {
     const run = this.lockChain.then(fn, fn);
     this.lockChain = run.catch(() => undefined);
     return run;
+  }
+
+  private currentUserId: string | null = null;
+
+  /**
+   * Binds on-device data to the signed-in user. Pass null on sign-out to pause syncing.
+   * If the device holds data from a different user, it is wiped first.
+   * Resolves to true when data was wiped.
+   */
+  setCurrentUser(userId: string | null): Promise<boolean> {
+    if (!userId) {
+      this.currentUserId = null;
+      return Promise.resolve(false);
+    }
+    return this.withLock(async () => {
+      let cleared = false;
+      const owner = await AsyncStorage.getItem(STORAGE_KEYS.OWNER);
+      if (owner && owner !== userId) {
+        console.log('[LocalStorage] Different user signed in: clearing previous user data.');
+        await this.removeAllKeys();
+        cleared = true;
+      }
+      // Data from before owner tracking existed is adopted by the first user.
+      await AsyncStorage.setItem(STORAGE_KEYS.OWNER, userId);
+      this.currentUserId = userId;
+      return cleared;
+    });
+  }
+
+  private async removeAllKeys(): Promise<void> {
+    await AsyncStorage.multiRemove(Object.values(STORAGE_KEYS));
+  }
+
+  /** Wipes all local habits, entries, badges, the sync queue and the owner tag. Use on sign-out. */
+  clearAll(): Promise<void> {
+    this.currentUserId = null;
+    this.syncRequested = false;
+    return this.withLock(() => this.removeAllKeys());
   }
 
   /** Subscribe to "a sync cycle sent something to the server". Returns an unsubscribe fn. */
@@ -377,6 +416,18 @@ class LocalStorageManager {
     this.triggerSync();
   }
 
+  /**
+   * Best effort: send pending changes now (e.g. right before sign-out).
+   * Waits for a running cycle, then runs one more. Gives up after `timeoutMs`.
+   */
+  async flush(timeoutMs = 8000): Promise<void> {
+    const work = (async () => {
+      while (this.isSyncing) await new Promise((r) => setTimeout(r, 100));
+      await this.processSyncQueue();
+    })();
+    await Promise.race([work, new Promise((r) => setTimeout(r, timeoutMs))]);
+  }
+
   triggerSync() {
     // Run in background without throwing
     setTimeout(() => {
@@ -402,7 +453,11 @@ class LocalStorageManager {
   }
 
   /** Sends one action to the server. `idMap` maps temp habit IDs created during this cycle. */
-  private async runAction(action: SyncAction, idMap: Record<string, string>): Promise<ActionOutcome> {
+  private async runAction(
+    action: SyncAction,
+    idMap: Record<string, string>,
+    cycleUser: string
+  ): Promise<ActionOutcome> {
     const resolve = (id: string) => idMap[id] || id;
 
     switch (action.type) {
@@ -412,6 +467,8 @@ class LocalStorageManager {
         if (tempId && serverHabit?.id) {
           idMap[tempId] = serverHabit.id;
           await this.withLock(async () => {
+            // Signed out / switched user while the request was in flight: local data is gone.
+            if (this.currentUserId !== cycleUser) return;
             const queue = await this.getSyncQueue();
 
             // User deleted the habit while this create was in flight:
@@ -509,6 +566,9 @@ class LocalStorageManager {
   }
 
   async processSyncQueue(): Promise<void> {
+    // Never sync without a known signed-in owner (prevents cross-account uploads).
+    const cycleUser = this.currentUserId;
+    if (!cycleUser) return;
     if (this.isSyncing) {
       // Something was queued mid-cycle; run another cycle when this one ends.
       this.syncRequested = true;
@@ -530,6 +590,7 @@ class LocalStorageManager {
       // Re-read the queue every iteration so actions added while we were
       // sending are seen, and never overwrite the queue with a stale copy.
       while (true) {
+        if (this.currentUserId !== cycleUser) break; // signed out mid-cycle
         const queue = await this.getSyncQueue();
         const action = queue.find((a) => !attempted.has(a.id));
         if (!action) break;
@@ -537,7 +598,7 @@ class LocalStorageManager {
 
         let outcome: ActionOutcome;
         try {
-          outcome = await this.runAction(action, idMap);
+          outcome = await this.runAction(action, idMap, cycleUser);
         } catch (err) {
           outcome = this.outcomeForError(action, err);
         }
@@ -549,6 +610,7 @@ class LocalStorageManager {
 
         if (outcome === 'done' || outcome === 'drop' || outcome === 'retry') {
           await this.withLock(async () => {
+            if (this.currentUserId !== cycleUser) return;
             const current = await this.getSyncQueue();
             const idx = current.findIndex((a) => a.id === action.id);
             if (idx < 0) return;
@@ -585,6 +647,7 @@ class LocalStorageManager {
           // was never mapped, it can never be sent: drop it instead of
           // leaving it stuck in the queue forever.
           await this.withLock(async () => {
+            if (this.currentUserId !== cycleUser) return;
             const current = await this.getSyncQueue();
             const map = await this.getIdMap();
             const tempId = [action.payload?.id, action.payload?.habitId].find(isTempId) as string | undefined;

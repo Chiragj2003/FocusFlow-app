@@ -19,35 +19,7 @@ export function AuthTokenProvider({ children }: AuthTokenProviderProps) {
     notificationsManager.updateScheduledReminders('app initialization');
   }, []);
 
-  // Listen to network state and auto-flush offline sync queue when coming online
-  useEffect(() => {
-    if (!isSignedIn) return;
-
-    // Trigger initial sync on mount
-    localStorage.triggerSync();
-
-    const unsubscribe = NetInfo.addEventListener((state) => {
-      if (state.isConnected && state.isInternetReachable !== false) {
-        console.log('[AuthTokenProvider] Internet connected. Flushing mobile sync queue to web...');
-        localStorage.triggerSync();
-      }
-    });
-
-    // After the queue pushes changes to the server, refetch server data so
-    // temp IDs are replaced with real ones and insights stay accurate.
-    const unsubscribeSync = localStorage.onSyncComplete(() => {
-      queryClient.invalidateQueries({ queryKey: ['habits'] });
-      queryClient.invalidateQueries({ queryKey: ['entries'] });
-      queryClient.invalidateQueries({ queryKey: ['insights'] });
-      queryClient.invalidateQueries({ queryKey: ['streaks'] });
-    });
-
-    return () => {
-      unsubscribe();
-      unsubscribeSync();
-    };
-  }, [isSignedIn, queryClient]);
-
+  // Set up the auth token for the web API (before any sync runs)
   useEffect(() => {
     if (!isSignedIn) {
       // Clear auth token when user signs out
@@ -64,10 +36,53 @@ export function AuthTokenProvider({ children }: AuthTokenProviderProps) {
         return null;
       }
     };
-    // Set up auth token for web API
     setAuthTokenGetter(getter);
   }, [getToken, isSignedIn, userId]);
 
+  // Bind on-device data to the signed-in user, then keep the offline queue flushing.
+  useEffect(() => {
+    if (!isSignedIn || !userId) {
+      // Pause syncing while nobody is signed in.
+      localStorage.setCurrentUser(null);
+      return;
+    }
+
+    let cancelled = false;
+    let unsubscribeNet: (() => void) | undefined;
+
+    // If a different account used this device before, its local data is wiped
+    // here, before anything can be synced into the new account.
+    localStorage
+      .setCurrentUser(userId)
+      .then((cleared) => {
+        if (cancelled) return;
+        if (cleared) queryClient.clear();
+
+        localStorage.triggerSync();
+        unsubscribeNet = NetInfo.addEventListener((state) => {
+          if (state.isConnected && state.isInternetReachable !== false) {
+            console.log('[AuthTokenProvider] Internet connected. Flushing mobile sync queue to web...');
+            localStorage.triggerSync();
+          }
+        });
+      })
+      .catch((error) => console.error('[AuthTokenProvider] Failed to bind local data to user:', error));
+
+    // After the queue pushes changes to the server, refetch server data so
+    // temp IDs are replaced with real ones and insights stay accurate.
+    const unsubscribeSync = localStorage.onSyncComplete(() => {
+      queryClient.invalidateQueries({ queryKey: ['habits'] });
+      queryClient.invalidateQueries({ queryKey: ['entries'] });
+      queryClient.invalidateQueries({ queryKey: ['insights'] });
+      queryClient.invalidateQueries({ queryKey: ['streaks'] });
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribeNet?.();
+      unsubscribeSync();
+    };
+  }, [isSignedIn, userId, queryClient]);
 
   return <>{children}</>;
 }
