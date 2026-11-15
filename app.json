@@ -7,12 +7,6 @@
     "icon": "./assets/images/icon.png",
     "scheme": "focusflow",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/images/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#09090b"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.focusflow.app",
@@ -42,7 +36,14 @@
           "resizeMode": "contain",
           "backgroundColor": "#09090b"
         }
-      ]
+      ],
+      "expo-asset",
+      "expo-audio",
+      "expo-font",
+      "expo-notifications",
+      "expo-secure-store",
+      "expo-status-bar",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true

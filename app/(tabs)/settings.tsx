@@ -10,6 +10,7 @@ import { Alert, Linking, Pressable, ScrollView, Switch, Text, View, Image } from
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { notificationsManager } from '@/lib/notifications';
+import { localStorage } from '@/lib/localStorage';
 import { useHabits, useInsights, useStreaks } from '../../lib/hooks';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://focus-flow-web-weld.vercel.app';
@@ -43,7 +44,25 @@ export default function SettingsScreen() {
     loadSettings();
   }, []);
 
+  /** Turning reminders on asks for permission; if refused, explain and keep the switch off. */
+  const ensurePermissionForToggle = async (value: boolean): Promise<boolean> => {
+    if (!value) return true;
+    const granted = await notificationsManager.requestPermissions();
+    if (!granted) {
+      Alert.alert(
+        'Notifications are off',
+        'To get habit reminders, allow notifications for FocusFlow in your phone settings.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => Linking.openSettings() },
+        ]
+      );
+    }
+    return granted;
+  };
+
   const handleToggleNotifications = async (value: boolean) => {
+    if (!(await ensurePermissionForToggle(value))) return;
     setNotifications(value);
     try {
       await AsyncStorage.setItem('@focusflow_settings_notifications', String(value));
@@ -54,6 +73,7 @@ export default function SettingsScreen() {
   };
 
   const handleToggleDailyReminder = async (value: boolean) => {
+    if (!(await ensurePermissionForToggle(value))) return;
     setDailyReminder(value);
     try {
       await AsyncStorage.setItem('@focusflow_settings_daily_reminder', String(value));
@@ -98,9 +118,14 @@ export default function SettingsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Clear all caches first
+              // Send any unsynced changes while we still have a token (best effort)
+              await localStorage.flush();
+
+              // Remove this user's data from the device so the next account can't see it
+              await localStorage.clearAll();
+              await notificationsManager.cancelAllReminders();
               queryClient.clear();
-              
+
               // Sign out from Clerk
               await signOut();
               
@@ -151,7 +176,9 @@ export default function SettingsScreen() {
                 throw new Error(data.error || 'Failed to delete account');
               }
               
-              // Clear React Query cache
+              // Remove all of this user's data from the device
+              await localStorage.clearAll();
+              await notificationsManager.cancelAllReminders();
               queryClient.clear();
 
               // Sign out (Clerk session)
