@@ -50,11 +50,11 @@ export const notificationsManager = {
     if (Platform.OS === 'web') return;
 
     try {
-      // 1. Cancel existing reminders first to avoid duplicates
-      await this.cancelAllReminders();
-
       const hasPermission = await this.requestPermissions();
       if (!hasPermission) return;
+
+      // Cancel existing reminders first to avoid duplicates
+      await this.cancelAllReminders();
 
       const reminderTimes = [
         { hour: 6, title: "Morning Habit Check 🌅", body: "Rise and shine! Your habits are waiting. Don't start the day with unfinished business - check off your morning goals now!" },
