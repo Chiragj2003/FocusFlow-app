@@ -10,6 +10,7 @@ const STORAGE_KEYS = {
   FOCUS_SESSIONS: '@focusflow_local_focus_sessions',
   SYNC_QUEUE: '@focusflow_sync_queue',
   LAST_SYNC: '@focusflow_last_sync_timestamp',
+  ID_MAP: '@focusflow_temp_id_map',
 };
 
 const MAX_RETRIES = 5;
@@ -43,6 +44,19 @@ type ActionOutcome =
   | 'stop'; // offline / not authenticated -> leave untouched and end this cycle
 
 const isTempId = (id: unknown): boolean => typeof id === 'string' && id.startsWith('temp-');
+
+/** True if a queued action points at the given habit id. */
+const referencesHabit = (a: SyncAction, habitId: string): boolean =>
+  a.payload?.id === habitId || a.payload?.habitId === habitId || a.payload?.tempId === habitId;
+
+/** Returns the payload with any temp habit ids replaced using the map. */
+const remapPayload = (payload: any, map: Record<string, string>): any => {
+  if (!payload || typeof payload !== 'object') return payload;
+  const next = { ...payload };
+  if (typeof next.id === 'string' && map[next.id]) next.id = map[next.id];
+  if (typeof next.habitId === 'string' && map[next.habitId]) next.habitId = map[next.habitId];
+  return next;
+};
 
 class LocalStorageManager {
   private isSyncing = false;
@@ -296,9 +310,43 @@ class LocalStorageManager {
     }
   }
 
-  async enqueueAction(type: SyncActionType, payload: any): Promise<void> {
+  // ==========================================
+  // TEMP ID -> SERVER ID MAP (persisted)
+  // ==========================================
+
+  async getIdMap(): Promise<Record<string, string>> {
+    try {
+      const data = await AsyncStorage.getItem(STORAGE_KEYS.ID_MAP);
+      return data ? JSON.parse(data) : {};
+    } catch (e) {
+      console.warn('[LocalStorage] Failed to load id map:', e);
+      return {};
+    }
+  }
+
+  private async saveIdMap(map: Record<string, string>): Promise<void> {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.ID_MAP, JSON.stringify(map));
+    } catch (e) {
+      console.warn('[LocalStorage] Failed to save id map:', e);
+    }
+  }
+
+  async enqueueAction(type: SyncActionType, rawPayload: any): Promise<void> {
     await this.withLock(async () => {
       const queue = await this.getSyncQueue();
+      // The UI may still hold a temp id for a habit that already synced.
+      const payload = type === 'CREATE_HABIT' ? rawPayload : remapPayload(rawPayload, await this.getIdMap());
+
+      // Deleting a habit that never reached the server: cancel its pending
+      // create and everything that depends on it, send nothing.
+      if (type === 'DELETE_HABIT' && isTempId(payload.id)) {
+        const hasPendingCreate = queue.some((a) => a.type === 'CREATE_HABIT' && a.payload.tempId === payload.id);
+        if (hasPendingCreate) {
+          await this.saveSyncQueue(queue.filter((a) => !referencesHabit(a, payload.id)));
+          return;
+        }
+      }
 
       // Coalesce rapid toggles for the same habit & date
       if (type === 'TOGGLE_ENTRY') {
@@ -364,6 +412,30 @@ class LocalStorageManager {
         if (tempId && serverHabit?.id) {
           idMap[tempId] = serverHabit.id;
           await this.withLock(async () => {
+            const queue = await this.getSyncQueue();
+
+            // User deleted the habit while this create was in flight:
+            // it now exists on the server, so delete it there too.
+            if (!queue.some((a) => a.id === action.id)) {
+              queue.push({
+                id: `sync-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                type: 'DELETE_HABIT',
+                payload: { id: serverHabit.id },
+                createdAt: Date.now(),
+                retryCount: 0,
+              });
+              await this.saveSyncQueue(queue);
+              return;
+            }
+
+            // Persist the mapping and rewrite queued actions to the server id.
+            const map = await this.getIdMap();
+            map[tempId] = serverHabit.id;
+            await this.saveIdMap(map);
+            await this.saveSyncQueue(
+              queue.map((a) => (a.id === action.id ? a : { ...a, payload: remapPayload(a.payload, map) }))
+            );
+
             const habits = await this.getLocalHabits();
             await this.saveLocalHabits(habits.map((h) => (h.id === tempId ? serverHabit : h)));
 
@@ -453,7 +525,7 @@ class LocalStorageManager {
       }
 
       const attempted = new Set<string>();
-      const idMap: Record<string, string> = {}; // temp client IDs -> server IDs (this cycle)
+      const idMap: Record<string, string> = await this.getIdMap(); // temp client IDs -> server IDs
 
       // Re-read the queue every iteration so actions added while we were
       // sending are seen, and never overwrite the queue with a stale copy.
@@ -487,14 +559,41 @@ class LocalStorageManager {
               current[idx].createdAt !== action.createdAt ||
               JSON.stringify(current[idx].payload) !== JSON.stringify(action.payload);
 
+            let next = current;
             if (outcome === 'retry') {
               if (!changedMeanwhile) current[idx].retryCount = action.retryCount + 1;
             } else if (!changedMeanwhile) {
-              current.splice(idx, 1);
+              next = current.filter((a) => a.id !== action.id);
             } else {
               this.syncRequested = true;
             }
-            await this.saveSyncQueue(current);
+
+            // The server permanently rejected a new habit: actions that depend
+            // on its temp id can never be sent, so remove them and the local copy.
+            if (outcome === 'drop' && action.type === 'CREATE_HABIT' && action.payload?.tempId) {
+              const tempId = action.payload.tempId;
+              next = next.filter((a) => !referencesHabit(a, tempId));
+              const habits = await this.getLocalHabits();
+              await this.saveLocalHabits(habits.filter((h) => h.id !== tempId));
+            }
+            await this.saveSyncQueue(next);
+          });
+        }
+
+        if (outcome === 'wait') {
+          // Waiting on a temp habit id. If no create for it is queued and it
+          // was never mapped, it can never be sent: drop it instead of
+          // leaving it stuck in the queue forever.
+          await this.withLock(async () => {
+            const current = await this.getSyncQueue();
+            const map = await this.getIdMap();
+            const tempId = [action.payload?.id, action.payload?.habitId].find(isTempId) as string | undefined;
+            if (!tempId || map[tempId]) return;
+            const hasCreate = current.some((a) => a.type === 'CREATE_HABIT' && a.payload?.tempId === tempId);
+            if (!hasCreate) {
+              console.error(`[LocalStorage Sync] Dropping orphaned ${action.type} for unknown habit ${tempId}.`);
+              await this.saveSyncQueue(current.filter((a) => a.id !== action.id));
+            }
           });
         }
 
