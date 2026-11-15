@@ -52,10 +52,7 @@ export function useHabits(active?: boolean) {
         const remote = await habitsApi.getAll(active);
         if (remote && Array.isArray(remote)) {
           // Merge with any unsynced local temporary habits
-          const local = await localStorage.getLocalHabits();
-          const pendingTemps = local.filter((h) => h.id.startsWith('temp-'));
-          const merged = [...pendingTemps, ...remote];
-          await localStorage.saveLocalHabits(merged);
+          const merged = await localStorage.mergeRemoteHabits(remote, active);
           return merged.filter((h) => (active === undefined ? true : h.active === active));
         }
         return remote;
@@ -301,26 +298,8 @@ export function useEntries(startDate: string, endDate: string) {
           entryDate: typeof e.entryDate === 'string' ? e.entryDate.split('T')[0] : formatDate(e.entryDate),
         }));
 
-        // Merge with local mobile storage entries
-        const local = await localStorage.getLocalEntries();
-        const map = new Map<string, HabitEntry>();
-        local.forEach((e) => map.set(`${e.habitId}_${e.entryDate.split('T')[0]}`, e));
-        normalized.forEach((e) => map.set(`${e.habitId}_${e.entryDate.split('T')[0]}`, e));
-        // Toggles still waiting in the sync queue win over server data,
-        // so the UI doesn't flip back before they are sent.
-        const queue = await localStorage.getSyncQueue();
-        const pendingKeys = new Set(
-          queue
-            .filter((a) => a.type === 'TOGGLE_ENTRY')
-            .map((a) => `${a.payload.habitId}_${String(a.payload.entryDate).split('T')[0]}`)
-        );
-        local.forEach((e) => {
-          const key = `${e.habitId}_${e.entryDate.split('T')[0]}`;
-          if (pendingKeys.has(key)) map.set(key, e);
-        });
-
-        const merged = Array.from(map.values());
-        await localStorage.saveLocalEntries(merged);
+        // Merge with local mobile storage entries (unsynced toggles win)
+        const merged = await localStorage.mergeRemoteEntries(normalized);
 
         return merged.filter((e) => {
           const d = e.entryDate.split('T')[0];
