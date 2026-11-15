@@ -1,4 +1,4 @@
-﻿// Color constants matching the FocusFlow web app
+// Color constants matching the FocusFlow web app
 export const Colors = {
   // Background colors
   background: '#09090b',

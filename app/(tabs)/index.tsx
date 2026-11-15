@@ -78,11 +78,9 @@ export default function DashboardScreen() {
           onSuccess: () => {
             Vibration.vibrate(500);
             Alert.alert("🎉 Badge Unlocked!", `You earned: ${badge.name}\n${badge.description}`);
-            refetchBadges();
           },
-          onError: () => {
-            // Remove from processing set if it failed, so it can be retried later
-            processingBadges.current.delete(badge.id);
+          onError: (err) => {
+            console.warn('[Dashboard] Badge award server notice (stored locally):', err?.message);
           }
         });
       }

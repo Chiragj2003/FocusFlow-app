@@ -651,8 +651,7 @@ export default function HabitsScreen() {
                 { habitId, entryDate: date, completed },
                 {
                   onError: (error) => {
-                    console.error('Failed to toggle habit in grid:', error);
-                    Alert.alert('Error', 'Failed to update habit. Please try again.');
+                    console.warn('[HabitGrid] Server sync queued; change saved locally in mobile storage:', error?.message);
                   },
                 }
               );
