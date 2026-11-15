@@ -44,7 +44,25 @@ export default function SettingsScreen() {
     loadSettings();
   }, []);
 
+  /** Turning reminders on asks for permission; if refused, explain and keep the switch off. */
+  const ensurePermissionForToggle = async (value: boolean): Promise<boolean> => {
+    if (!value) return true;
+    const granted = await notificationsManager.requestPermissions();
+    if (!granted) {
+      Alert.alert(
+        'Notifications are off',
+        'To get habit reminders, allow notifications for FocusFlow in your phone settings.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => Linking.openSettings() },
+        ]
+      );
+    }
+    return granted;
+  };
+
   const handleToggleNotifications = async (value: boolean) => {
+    if (!(await ensurePermissionForToggle(value))) return;
     setNotifications(value);
     try {
       await AsyncStorage.setItem('@focusflow_settings_notifications', String(value));
@@ -55,6 +73,7 @@ export default function SettingsScreen() {
   };
 
   const handleToggleDailyReminder = async (value: boolean) => {
+    if (!(await ensurePermissionForToggle(value))) return;
     setDailyReminder(value);
     try {
       await AsyncStorage.setItem('@focusflow_settings_daily_reminder', String(value));

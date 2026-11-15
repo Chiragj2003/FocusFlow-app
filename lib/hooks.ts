@@ -132,6 +132,8 @@ export function useCreateHabit() {
     onSuccess: () => {
       // Temp ID -> server ID swap happens in the sync queue; queries are
       // invalidated when a sync cycle finishes (see AuthTokenProvider).
+      // First habit is a natural moment to ask for reminder permission (once).
+      notificationsManager.askOnceIfRemindersEnabled();
       notificationsManager.updateScheduledReminders('habit created', 5000);
     },
   });
