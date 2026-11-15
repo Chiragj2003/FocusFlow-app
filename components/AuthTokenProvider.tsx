@@ -33,10 +33,20 @@ export function AuthTokenProvider({ children }: AuthTokenProviderProps) {
       }
     });
 
+    // After the queue pushes changes to the server, refetch server data so
+    // temp IDs are replaced with real ones and insights stay accurate.
+    const unsubscribeSync = localStorage.onSyncComplete(() => {
+      queryClient.invalidateQueries({ queryKey: ['habits'] });
+      queryClient.invalidateQueries({ queryKey: ['entries'] });
+      queryClient.invalidateQueries({ queryKey: ['insights'] });
+      queryClient.invalidateQueries({ queryKey: ['streaks'] });
+    });
+
     return () => {
       unsubscribe();
+      unsubscribeSync();
     };
-  }, [isSignedIn]);
+  }, [isSignedIn, queryClient]);
 
   useEffect(() => {
     if (!isSignedIn) {
