@@ -1,4 +1,5 @@
 import { AuthTokenProvider } from '@/components/AuthTokenProvider';
+import { CelebrationHost } from '@/components/ui/CelebrationHost';
 import { tokenCache } from '@/lib/auth';
 import { ThemeProvider, useTheme } from '@/lib/ThemeContext';
 import { ClerkLoaded, ClerkProvider } from '@clerk/clerk-expo';
@@ -63,6 +64,7 @@ function RootLayoutNav() {
         <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
       </Stack>
       <StatusBar style={isDark ? 'light' : 'dark'} />
+      <CelebrationHost />
     </>
   );
 }
