@@ -179,9 +179,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   };
   
   // Determine if dark mode is active
-  const isDark = mode === 'system' 
-    ? systemColorScheme === 'dark' 
-    : mode === 'dark';
+  // Dark-only for now: every phone gets the dark theme, whatever its system setting
+  // or any choice saved by an older version. (Was: mode / system color scheme.)
+  const isDark = true;
   
   // Toggle between light and dark
   const toggleTheme = () => {
