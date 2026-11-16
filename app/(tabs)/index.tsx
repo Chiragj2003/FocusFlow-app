@@ -1,529 +1,381 @@
-import { useTheme } from '@/lib/ThemeContext';
+import { FlameMark } from '@/components/ui/FlameMark';
+import { GradientButton } from '@/components/ui/GradientButton';
+import { Mascot, MascotMood } from '@/components/ui/Mascot';
+import { ProgressRing } from '@/components/ui/ProgressRing';
 import type { Badge } from '@/lib/api';
-import { getCurrentMonthRange, getToday, useBadges, useEntries, useHabits, useInsights, useStreaks, useAwardBadge } from '@/lib/hooks';
-import { getDailyQuote, getStreakMessage } from '@/lib/quotes';
-import type { HabitEntry, TopHabit } from '@/lib/types';
+import { celebrate } from '@/lib/celebrate';
+import { getToday, useAwardBadge, useBadges, useEntries, useHabits, useInsights, useStreaks, useToggleEntry } from '@/lib/hooks';
+import { messages } from '@/lib/messages';
+import { getDailyQuote } from '@/lib/quotes';
+import { useTheme } from '@/lib/ThemeContext';
+import type { Habit, HabitEntry } from '@/lib/types';
+import { useUser } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuth, useUser } from '@clerk/clerk-expo';
-import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useMemo } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View, Image, Alert, Vibration } from 'react-native';
+import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-// Available milestones to unlock - aligned with ALL_BADGES from lib/constants.ts
+type IconName = keyof typeof Ionicons.glyphMap;
+
+// Milestones to unlock (ids are what the server stores)
 const AVAILABLE_BADGES = [
-  { id: 'first_habit', name: 'First Habit', description: 'Create your first habit', check: (streaks: any, insights: any, habits: any) => (habits?.length || 0) >= 1 },
-  { id: 'first_completion', name: 'First Step', description: 'Complete your first habit entry', check: (streaks: any, insights: any) => (insights?.totalCompleted || 0) >= 1 },
-  { id: '3_day_streak', name: '3 Day Streak', description: 'Maintain a 3-day streak', check: (streaks: any) => (streaks?.longestStreak || 0) >= 3 },
-  { id: 'week_warrior', name: 'Week Warrior', description: 'Maintain a 7-day streak', check: (streaks: any) => (streaks?.longestStreak || 0) >= 7 },
-  { id: '10_day_streak', name: 'Double Digits', description: 'Maintain a 10-day streak', check: (streaks: any) => (streaks?.longestStreak || 0) >= 10 },
-  { id: 'two_week_titan', name: 'Two Week Titan', description: 'Maintain a 14-day streak', check: (streaks: any) => (streaks?.longestStreak || 0) >= 14 },
-  { id: '21_day_streak', name: 'Habit Former', description: 'Maintain a 21-day streak', check: (streaks: any) => (streaks?.longestStreak || 0) >= 21 },
-  { id: 'monthly_master', name: 'Monthly Master', description: 'Maintain a 30-day streak', check: (streaks: any) => (streaks?.longestStreak || 0) >= 30 },
-  { id: '10_completions', name: '10 Completions', description: 'Complete 10 habit entries', check: (streaks: any, insights: any) => (insights?.totalCompleted || 0) >= 10 },
-  { id: '25_completions', name: '25 Completions', description: 'Complete 25 habit entries', check: (streaks: any, insights: any) => (insights?.totalCompleted || 0) >= 25 },
-  { id: '50_completions', name: 'Half Century', description: 'Complete 50 habit entries', check: (streaks: any, insights: any) => (insights?.totalCompleted || 0) >= 50 },
-  { id: 'century_club', name: 'Century Club', description: 'Complete 100 habit entries', check: (streaks: any, insights: any) => (insights?.totalCompleted || 0) >= 100 },
-  { id: 'all_habits_completed', name: 'Flawless Day', description: 'Complete all daily habits', check: (streaks: any, insights: any, habits: any, todayCompleted: number, todayTotal: number) => todayTotal > 0 && todayCompleted === todayTotal },
+  { id: 'first_habit', name: 'First Habit', description: 'You created your first habit', streak: 0, check: (s: any, i: any, h: any) => (h?.length || 0) >= 1 },
+  { id: 'first_completion', name: 'First Step', description: 'You completed your first habit', streak: 0, check: (s: any, i: any) => (i?.totalCompleted || 0) >= 1 },
+  { id: '3_day_streak', name: '3 Day Streak', description: 'Three days in a row', streak: 3, check: (s: any) => (s?.longestStreak || 0) >= 3 },
+  { id: 'week_warrior', name: 'Week Warrior', description: 'A full 7-day streak', streak: 7, check: (s: any) => (s?.longestStreak || 0) >= 7 },
+  { id: '10_day_streak', name: 'Double Digits', description: 'A 10-day streak', streak: 10, check: (s: any) => (s?.longestStreak || 0) >= 10 },
+  { id: 'two_week_titan', name: 'Two Week Titan', description: 'A 14-day streak', streak: 14, check: (s: any) => (s?.longestStreak || 0) >= 14 },
+  { id: '21_day_streak', name: 'Habit Former', description: 'A 21-day streak', streak: 21, check: (s: any) => (s?.longestStreak || 0) >= 21 },
+  { id: 'monthly_master', name: 'Monthly Master', description: 'A 30-day streak', streak: 30, check: (s: any) => (s?.longestStreak || 0) >= 30 },
+  { id: '10_completions', name: '10 Completions', description: '10 habits completed', streak: 0, check: (s: any, i: any) => (i?.totalCompleted || 0) >= 10 },
+  { id: '25_completions', name: '25 Completions', description: '25 habits completed', streak: 0, check: (s: any, i: any) => (i?.totalCompleted || 0) >= 25 },
+  { id: '50_completions', name: 'Half Century', description: '50 habits completed', streak: 0, check: (s: any, i: any) => (i?.totalCompleted || 0) >= 50 },
+  { id: 'century_club', name: 'Century Club', description: '100 habits completed', streak: 0, check: (s: any, i: any) => (i?.totalCompleted || 0) >= 100 },
+  { id: 'all_habits_completed', name: 'Flawless Day', description: 'Every habit done in one day', streak: 0, check: (s: any, i: any, h: any, done: number, total: number) => total > 0 && done === total },
 ];
+
+const CATEGORY_ICONS: Record<string, IconName> = {
+  health: 'heart',
+  fitness: 'barbell',
+  learning: 'book',
+  mindfulness: 'flower',
+  productivity: 'laptop',
+  social: 'people',
+  creative: 'color-palette',
+};
+
+const KEYWORD_ICONS: [RegExp, IconName][] = [
+  [/water|drink|hydrat/i, 'water'],
+  [/sleep|bed|rest/i, 'moon'],
+  [/read|book/i, 'book'],
+  [/walk|step|run/i, 'walk'],
+  [/gym|workout|exercise|push|lift/i, 'barbell'],
+  [/medita|breath|mind/i, 'flower'],
+  [/code|work|focus|study/i, 'laptop'],
+  [/food|eat|junk|diet|fruit|veg/i, 'nutrition'],
+  [/journal|write/i, 'create'],
+];
+
+function habitIcon(h: Habit): IconName {
+  for (const [re, icon] of KEYWORD_ICONS) if (re.test(h.title)) return icon;
+  return CATEGORY_ICONS[(h.category || '').toLowerCase()] ?? 'sparkles';
+}
 
 export default function DashboardScreen() {
   const { isDark, colors } = useTheme();
   const router = useRouter();
   const { user } = useUser();
-  const { isSignedIn } = useAuth();
   const today = getToday();
 
-  // Fetch data using React Query hooks
   const { data: habits, isLoading: habitsLoading, refetch: refetchHabits } = useHabits(true);
-  const { data: insights, isLoading: insightsLoading, refetch: refetchInsights } = useInsights();
-  const { data: streaks, isLoading: streaksLoading, refetch: refetchStreaks } = useStreaks();
+  const { data: insights, refetch: refetchInsights } = useInsights();
+  const { data: streaks, refetch: refetchStreaks } = useStreaks();
   const { data: badges, refetch: refetchBadges } = useBadges();
-  const awardBadgeMutation = useAwardBadge();
   const { data: entries, refetch: refetchEntries } = useEntries(today, today);
+  const awardBadgeMutation = useAwardBadge();
+  const toggleEntry = useToggleEntry();
   const processingBadges = React.useRef(new Set<string>());
-
   const [refreshing, setRefreshing] = React.useState(false);
 
-  const isLoading = habitsLoading || insightsLoading || streaksLoading;
-
-  // Calculate today's completion (cap correctly to avoid >100% or '6 of 4')
-  const activeHabits = habits?.filter(h => h.active !== false) || [];
+  const activeHabits = useMemo(() => (habits || []).filter((h: Habit) => h.active !== false), [habits]);
   const todayTotal = activeHabits.length;
-  
-  const activeHabitIds = new Set(activeHabits.map(h => h.id));
-  const todayEntries = entries?.filter((e: HabitEntry) => e.entryDate === today && e.completed && activeHabitIds.has(e.habitId)) || [];
-  const uniqueCompletedHabits = new Set(todayEntries.map((e: HabitEntry) => e.habitId));
-  
-  const todayCompleted = Math.min(uniqueCompletedHabits.size, todayTotal);
-  const completionPercentage = todayTotal > 0 ? Math.min(Math.round((todayCompleted / todayTotal) * 100), 100) : 0;
 
-  // Evaluate badge unlocks
+  const doneToday = useMemo(() => {
+    const ids = new Set(
+      (entries || [])
+        .filter((e: HabitEntry) => e.completed && e.entryDate.split('T')[0] === today)
+        .map((e: HabitEntry) => e.habitId)
+    );
+    return ids;
+  }, [entries, today]);
+
+  const todayCompleted = activeHabits.filter((h: Habit) => doneToday.has(h.id)).length;
+  const progress = todayTotal > 0 ? todayCompleted / todayTotal : 0;
+
+  const streakByHabit = useMemo(() => {
+    const map = new Map<string, number>();
+    (streaks?.streaksByHabit || []).forEach((s: any) => map.set(s.habitId, s.currentStreak || 0));
+    return map;
+  }, [streaks]);
+
+  // Evaluate badge unlocks and celebrate new ones
   React.useEffect(() => {
-    if (!badges || !streaks || !insights) return;
-    // Don't evaluate badges if there are no habits
-    if (!habits || habits.length === 0) return;
-    
-    const collectedNames = new Set(badges.map(b => b.name));
-    
-    AVAILABLE_BADGES.forEach(badge => {
-      // Check if already earned by ID or legacy name mapping
-      const alreadyEarned = collectedNames.has(badge.id) || collectedNames.has(badge.name);
-      
-      if (!alreadyEarned && !processingBadges.current.has(badge.id) && badge.check(streaks, insights, habits, todayCompleted, todayTotal)) {
-        processingBadges.current.add(badge.id);
-        awardBadgeMutation.mutate({ name: badge.id, metadata: { displayName: badge.name, description: badge.description } }, {
-          onSuccess: () => {
-            Vibration.vibrate(500);
-            Alert.alert("🎉 Badge Unlocked!", `You earned: ${badge.name}\n${badge.description}`);
-          },
-          onError: (err) => {
-            console.warn('[Dashboard] Badge award server notice (stored locally):', err?.message);
-          }
-        });
-      }
+    if (!badges || !streaks || !insights || !habits || habits.length === 0) return;
+    const collected = new Set(badges.map((b: Badge) => b.name));
+
+    AVAILABLE_BADGES.forEach((badge) => {
+      const earned = collected.has(badge.id) || collected.has(badge.name);
+      if (earned || processingBadges.current.has(badge.id)) return;
+      if (!badge.check(streaks, insights, habits, todayCompleted, todayTotal)) return;
+
+      processingBadges.current.add(badge.id);
+      awardBadgeMutation.mutate(
+        { name: badge.id, metadata: { displayName: badge.name, description: badge.description } },
+        {
+          onSuccess: () =>
+            celebrate(
+              badge.streak > 0
+                ? {
+                    title: 'Streak milestone!',
+                    message: messages.streak(badge.streak),
+                    mood: 'streak',
+                    highlight: `${badge.streak} day streak`,
+                    highlightIcon: 'flame',
+                  }
+                : {
+                    title: 'Badge unlocked!',
+                    message: messages.badge(badge.description),
+                    mood: 'celebrate',
+                    highlight: badge.name,
+                    highlightIcon: 'trophy',
+                  }
+            ),
+          onError: (err) => console.warn('[Home] Badge award stored locally:', err?.message),
+        }
+      );
     });
   }, [streaks, insights, badges, habits, todayCompleted, todayTotal]);
 
-  // Get streak data
-  const currentStreak = todayTotal > 0 ? (streaks?.currentStreak || 0) : 0;
-  const bestStreak = todayTotal > 0 ? (streaks?.longestStreak || 0) : 0;
-
-  // Get completion rate from insights
-  const weeklyRate = todayTotal > 0 && insights ? Math.round(insights.overallCompletionRate * 100) : 0;
-  const totalCompleted = todayTotal > 0 ? (insights?.totalCompleted || 0) : 0;
-
-  // Get daily quote
+  const currentStreak = todayTotal > 0 ? streaks?.currentStreak || 0 : 0;
+  const monthRate = todayTotal > 0 && insights ? Math.round(insights.overallCompletionRate * 100) : 0;
   const quote = getDailyQuote();
-  const streakMessage = getStreakMessage(currentStreak);
 
-  // Dynamic greeting based on time of day
-  const greeting = useMemo(() => {
-    const hours = new Date().getHours();
-    if (hours < 12) return 'Good Morning';
-    if (hours < 17) return 'Good Afternoon';
-    return 'Good Evening';
-  }, []);
-
-  // Format today's date elegantly
-  const formattedDate = useMemo(() => {
-    return new Date().toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-    });
-  }, []);
-
-  // Clean username fallback
-  const userName = user?.firstName || user?.emailAddresses?.[0]?.emailAddress?.split('@')[0] || 'Champion';
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const mood: MascotMood =
+    todayTotal > 0 && todayCompleted >= todayTotal ? 'celebrate' : hour >= 22 || hour < 5 ? 'sleeping' : currentStreak >= 3 ? 'streak' : 'happy';
+  const userName = user?.firstName || user?.emailAddresses?.[0]?.emailAddress?.split('@')[0] || 'friend';
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([
-      refetchHabits(),
-      refetchInsights(),
-      refetchStreaks(),
-      refetchBadges(),
-      refetchEntries(),
-    ]);
+    await Promise.all([refetchHabits(), refetchInsights(), refetchStreaks(), refetchBadges(), refetchEntries()]);
     setRefreshing(false);
   }, [refetchHabits, refetchInsights, refetchStreaks, refetchBadges, refetchEntries]);
 
-  if (isLoading && !refreshing) {
+  const toggle = (habit: Habit) => {
+    const completed = !doneToday.has(habit.id);
+    Haptics.impactAsync(completed ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    toggleEntry.mutate({ habitId: habit.id, entryDate: today, completed });
+  };
+
+  if (habitsLoading && !habits && !refreshing) {
     return (
-      <SafeAreaView edges={['top']} style={{ backgroundColor: colors.background }} className="flex-1 items-center justify-center">
+      <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={{ color: colors.textMuted }} className="mt-4 font-semibold text-sm">
-          Bundling your flow...
-        </Text>
       </SafeAreaView>
     );
   }
 
-  return (
-    <SafeAreaView edges={['top']} style={{ backgroundColor: colors.background }} className="flex-1">
-      <StatusBar style={isDark ? 'light' : 'dark'} />
-      
-      {/* Visual background ambient accent (subtle dark mode premium glow) */}
-      {isDark && (
-        <View 
-          className="absolute top-0 right-0 w-72 h-72 rounded-full opacity-20 blur-3xl pointer-events-none" 
-          style={{ backgroundColor: colors.primary, top: -50, right: -50 }} 
-        />
-      )}
+  const card = { backgroundColor: colors.card, borderColor: colors.cardBorder, borderWidth: 1 } as const;
+  const dots = activeHabits.slice(0, 7);
 
+  return (
+    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.background }}>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       <ScrollView
-        className="flex-1 px-4"
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
-        }
+        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View className="pt-6 pb-4">
-          <View className="flex-row items-center justify-between">
-            <View className="flex-1">
-              <Text style={{ color: colors.textMuted }} className="text-xs uppercase tracking-widest font-black opacity-80">
-                {formattedDate}
-              </Text>
-              <Text style={{ color: colors.text }} className="text-2xl font-black tracking-tight mt-0.5">
-                {greeting}, {userName}
-              </Text>
-            </View>
-            <Pressable
-              onPress={() => router.push('/settings')}
-              className="w-11 h-11 rounded-2xl overflow-hidden items-center justify-center shadow-sm border active:scale-95 transition-transform"
-              style={{ borderColor: colors.border, backgroundColor: colors.surface }}
-            >
-              {user?.imageUrl ? (
-                <Image source={{ uri: user.imageUrl }} className="w-full h-full" />
-              ) : (
-                <Ionicons name="person" size={20} color={colors.textSecondary} />
-              )}
-            </Pressable>
-          </View>
-        </View>
-
-        {/* Today's Focus Hero Card */}
-        <View 
-          style={{ backgroundColor: colors.surface, borderColor: colors.border }} 
-          className="rounded-3xl border p-6 shadow-sm mb-6"
-        >
-          <View className="flex-row items-center justify-between mb-5">
-            <View className="flex-1 pr-4">
-              <Text style={{ color: colors.text }} className="text-lg font-black tracking-tight">Today's Focus</Text>
-              <Text style={{ color: colors.textMuted }} className="text-xs font-semibold mt-1">
-                {todayCompleted} of {todayTotal} habits completed
-              </Text>
-            </View>
-            <View className="px-3.5 py-1.5 rounded-2xl" style={{ backgroundColor: colors.primary + '15' }}>
-              <Text style={{ color: colors.primary }} className="text-xl font-black">{completionPercentage}%</Text>
-            </View>
-          </View>
-
-          {/* Minimalist Progress Track */}
-          <View style={{ backgroundColor: colors.backgroundSecondary }} className="h-2 rounded-full overflow-hidden mb-6">
-            <View
-              style={{ 
-                width: `${completionPercentage}%`,
-                backgroundColor: colors.primary,
-              }}
-              className="h-full rounded-full"
-            />
-          </View>
-
-          {/* Quick Stats Dashboard Metrics Row */}
-          <View className="flex-row items-center justify-between bg-zinc-950/5 dark:bg-black/10 p-4 rounded-2xl border" style={{ borderColor: colors.border }}>
-            {/* Streak Column */}
-            <View className="items-center flex-1">
-              <View className="flex-row items-center mb-1">
-                <Ionicons name="flame" size={18} color="#f97316" />
-                <Text style={{ color: colors.text }} className="text-base font-black ml-1.5">{currentStreak}</Text>
-              </View>
-              <Text style={{ color: colors.textMuted }} className="text-[9px] font-bold uppercase tracking-wider">Streak</Text>
-            </View>
-            
-            <View className="w-px h-8 self-center" style={{ backgroundColor: colors.border }} />
-            
-            {/* Completed Column */}
-            <View className="items-center flex-1">
-              <View className="flex-row items-center mb-1">
-                <Ionicons name="checkmark-circle" size={18} color={colors.success} />
-                <Text style={{ color: colors.text }} className="text-base font-black ml-1.5">{todayCompleted}</Text>
-              </View>
-              <Text style={{ color: colors.textMuted }} className="text-[9px] font-bold uppercase tracking-wider">Completed</Text>
-            </View>
-            
-            <View className="w-px h-8 self-center" style={{ backgroundColor: colors.border }} />
-            
-            {/* Month Rate Column */}
-            <View className="items-center flex-1">
-              <View className="flex-row items-center mb-1">
-                <Ionicons name="trending-up" size={18} color={colors.info} />
-                <Text style={{ color: colors.text }} className="text-base font-black ml-1.5">{weeklyRate}%</Text>
-              </View>
-              <Text style={{ color: colors.textMuted }} className="text-[9px] font-bold uppercase tracking-wider">Month Rate</Text>
-            </View>
-          </View>
-
-          {/* Streak Banner integrated cleanly inside the card */}
-          {currentStreak > 0 && (
-            <View 
-              style={{ backgroundColor: colors.primary + '10', borderColor: colors.primary + '20' }} 
-              className="mt-4 p-4 rounded-2xl border flex-row items-start"
-            >
-              <Ionicons name="sparkles" size={16} color={colors.primary} style={{ marginTop: 2 }} />
-              <View className="flex-1 ml-3">
-                <Text style={{ color: colors.text }} className="text-xs font-black">
-                  {currentStreak} Day Streak Active!
-                </Text>
-                <Text style={{ color: colors.textSecondary }} className="text-[11px] font-semibold mt-0.5 leading-relaxed">
-                  {streakMessage}
-                </Text>
-              </View>
-            </View>
-          )}
-        </View>
-
-        {/* Stats Grid */}
-        <View className="mb-6">
-          <Text style={{ color: colors.text }} className="text-base font-black mb-3.5 px-1">Performance Overview</Text>
-          <View className="flex-row flex-wrap justify-between">
-            <StatsCard
-              title="Active Habits"
-              value={habits?.length || 0}
-              subtitle="being tracked"
-              icon="grid-outline"
-              colors={colors}
-              accentColor="#3b82f6"
-            />
-            <StatsCard
-              title="Best Streak"
-              value={bestStreak}
-              subtitle="personal best"
-              icon="trophy-outline"
-              colors={colors}
-              accentColor="#ea580c"
-            />
-            <StatsCard
-              title="This Month"
-              value={`${weeklyRate}%`}
-              subtitle="completion rate"
-              icon="stats-chart-outline"
-              colors={colors}
-              accentColor="#10b981"
-            />
-            <StatsCard
-              title="Completed"
-              value={totalCompleted}
-              subtitle="total this month"
-              icon="checkmark-done-outline"
-              colors={colors}
-              accentColor="#8b5cf6"
-            />
-          </View>
-        </View>
-
-        {/* Top Habits Section */}
-        {insights?.topHabits && habits && habits.length > 0 && insights.topHabits.filter((h: TopHabit) => habits.some((activeH: any) => activeH.id === h.habitId)).length > 0 && (
-          <View 
-            style={{ backgroundColor: colors.surface, borderColor: colors.border }} 
-            className="mb-6 rounded-3xl border p-5 shadow-sm"
+        {/* Top bar */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
+          <FlameMark size={30} />
+          <Text style={{ fontSize: 20, fontWeight: '800', marginLeft: 6, letterSpacing: -0.3, color: colors.text }}>
+            Focus<Text style={{ color: colors.primary }}>Flow</Text>
+          </Text>
+          <View style={{ flex: 1 }} />
+          <Pressable
+            onPress={() => router.push('/settings')}
+            accessibilityRole="button"
+            accessibilityLabel="Open settings"
+            style={{ ...card, width: 42, height: 42, borderRadius: 21, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}
           >
-            <View className="flex-row items-center justify-between mb-4">
-              <View>
-                <Text style={{ color: colors.text }} className="text-base font-black tracking-tight">Top Consistent Habits</Text>
-                <Text style={{ color: colors.textMuted }} className="text-[11px] font-semibold mt-0.5">Your leading daily routines</Text>
-              </View>
-              <Pressable 
-                onPress={() => router.push('/insights')}
-                className="w-7 h-7 rounded-xl items-center justify-center"
-                style={{ backgroundColor: colors.backgroundSecondary }}
-              >
-                <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
-              </Pressable>
+            {user?.imageUrl ? (
+              <Image source={{ uri: user.imageUrl }} style={{ width: '100%', height: '100%' }} />
+            ) : (
+              <Ionicons name="person-outline" size={20} color={colors.textSecondary} />
+            )}
+          </Pressable>
+        </View>
+
+        {/* Greeting */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 14, marginBottom: 14 }}>
+          <View style={{ flex: 1, paddingRight: 8 }}>
+            <Text style={{ color: colors.text, fontSize: 28, fontWeight: '800', letterSpacing: -0.6, lineHeight: 34 }}>
+              {greeting},{'\n'}
+              {userName} 👋
+            </Text>
+            <Text style={{ color: colors.textMuted, fontSize: 14, marginTop: 6 }}>{messages.greetingLine(todayCompleted, todayTotal)}</Text>
+          </View>
+          <Mascot mood={mood} size={112} />
+        </View>
+
+        {/* Quick stats */}
+        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
+          {[
+            { icon: 'flame' as IconName, value: `${currentStreak}`, label: 'Day streak' },
+            { icon: 'checkmark-circle' as IconName, value: `${todayCompleted}/${todayTotal}`, label: 'Today' },
+            { icon: 'bar-chart' as IconName, value: `${monthRate}%`, label: 'This month' },
+          ].map((s) => (
+            <View key={s.label} style={{ ...card, flex: 1, borderRadius: 20, paddingVertical: 14, paddingHorizontal: 12 }}>
+              <Ionicons name={s.icon} size={20} color={colors.primary} />
+              <Text style={{ color: colors.text, fontSize: 20, fontWeight: '800', marginTop: 6 }}>{s.value}</Text>
+              <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 1 }}>{s.label}</Text>
             </View>
-            {insights.topHabits.filter((h: TopHabit) => habits?.some((activeH: any) => activeH.id === h.habitId)).slice(0, 3).map((habit: TopHabit, index: number) => (
-              <View
-                key={habit.habitId}
-                style={{ borderColor: colors.border }}
-                className={`flex-row items-center py-3 ${index < 2 ? 'border-b' : ''}`}
-              >
-                <View
-                  className="w-10 h-10 rounded-2xl items-center justify-center mr-4"
-                  style={{ backgroundColor: habit.color + '15' }}
-                >
-                  <Text className="font-black text-sm" style={{ color: habit.color || colors.primary }}>
-                    #{index + 1}
-                  </Text>
-                </View>
-                <View className="flex-1">
-                  <Text style={{ color: colors.text }} className="font-bold text-sm">{habit.title}</Text>
-                  <View className="flex-row items-center mt-1.5">
-                    <View style={{ backgroundColor: colors.backgroundTertiary }} className="flex-1 h-1.5 rounded-full mr-3">
-                      <View
-                        style={{
-                          width: `${Math.round(habit.completionRate * 100)}%`,
-                          backgroundColor: habit.color || colors.primary
-                        }}
-                        className="h-full rounded-full"
-                      />
+          ))}
+        </View>
+
+        {/* Today's progress (signature: the ring glows brighter as the day fills up) */}
+        {todayTotal > 0 && (
+          <View style={{ ...card, borderRadius: 24, padding: 18, flexDirection: 'row', alignItems: 'center', marginBottom: 22 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: colors.textMuted, fontSize: 13, fontWeight: '600' }}>Today’s progress</Text>
+              <Text style={{ color: colors.text, fontSize: 22, fontWeight: '800', marginTop: 2 }}>
+                {todayCompleted} of {todayTotal} habits
+              </Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 }}>
+                {dots.map((h: Habit) => {
+                  const done = doneToday.has(h.id);
+                  return (
+                    <View
+                      key={h.id}
+                      style={{
+                        width: 26,
+                        height: 26,
+                        borderRadius: 13,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: done ? colors.primary : colors.backgroundSecondary,
+                      }}
+                    >
+                      {done && <Ionicons name="checkmark" size={15} color="#ffffff" />}
                     </View>
-                    <Text style={{ color: colors.textMuted }} className="text-[10px] font-bold w-10 text-right">
-                      {Math.round(habit.completionRate * 100)}%
-                    </Text>
-                  </View>
-                </View>
+                  );
+                })}
+                {activeHabits.length > dots.length && (
+                  <Text style={{ color: colors.textMuted, fontSize: 12, alignSelf: 'center' }}>+{activeHabits.length - dots.length}</Text>
+                )}
               </View>
-            ))}
+            </View>
+            <View
+              style={{
+                borderRadius: 50,
+                shadowColor: '#f97316',
+                shadowOpacity: isDark ? 0.15 + progress * 0.45 : 0.1 + progress * 0.2,
+                shadowRadius: 10 + progress * 20,
+                shadowOffset: { width: 0, height: 0 },
+              }}
+            >
+              <ProgressRing size={96} strokeWidth={10} progress={progress} trackColor={colors.backgroundSecondary}>
+                <Text style={{ color: colors.text, fontSize: 20, fontWeight: '800' }}>{Math.round(progress * 100)}%</Text>
+              </ProgressRing>
+            </View>
           </View>
         )}
 
-        {/* Old Recent Achievements Removed */}
-
-        {/* Quick Tools */}
-        <View className="mb-6">
-          <Text style={{ color: colors.text }} className="text-base font-black mb-3 px-1">Quick Tools</Text>
-          <View className="flex-row justify-between">
-            <QuickActionButton
-              icon="add-circle"
-              label="New Habit"
-              onPress={() => router.push('/habits')}
-              colors={colors}
-            />
-            <QuickActionButton
-              icon="time"
-              label="Focus Timer"
-              onPress={() => router.push('/focus')}
-              colors={colors}
-            />
-            <QuickActionButton
-              icon="trophy"
-              label="Badges"
-              onPress={() => router.push('/badges')}
-              colors={colors}
-            />
-            <QuickActionButton
-              icon="star"
-              label="Achievements"
-              onPress={() => router.push('/achievements')}
-              colors={colors}
-            />
-          </View>
+        {/* Your habits */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+          <Text style={{ color: colors.text, fontSize: 20, fontWeight: '800', flex: 1 }}>Your habits</Text>
+          <GradientButton label="Add habit" icon="add" size="sm" onPress={() => router.push('/habits')} />
         </View>
 
-        {/* Quote Block */}
-        <View className="mb-8 rounded-3xl overflow-hidden">
-          <View
-            style={{ backgroundColor: colors.surface, borderColor: colors.border }}
-            className="p-5 rounded-3xl border flex-row items-start shadow-sm"
-          >
-            <View className="mr-3 mt-1 bg-orange-500/10 p-2 rounded-xl">
-              <Ionicons name="sparkles" size={16} color={colors.primary} />
-            </View>
-            <View className="flex-1">
-              <Text style={{ color: colors.textSecondary }} className="text-[13px] font-bold italic leading-relaxed">
-                "{quote.text}"
-              </Text>
-              <Text style={{ color: colors.primary }} className="text-[10px] mt-2.5 font-bold uppercase tracking-wider">
-                — {quote.author}
-              </Text>
-            </View>
+        {activeHabits.length === 0 ? (
+          <View style={{ ...card, borderRadius: 24, alignItems: 'center', paddingVertical: 24, paddingHorizontal: 24, marginBottom: 22 }}>
+            <Mascot mood="sleeping" size={130} />
+            <Text style={{ color: colors.text, fontSize: 18, fontWeight: '800' }}>No habits yet</Text>
+            <Text style={{ color: colors.textMuted, textAlign: 'center', marginTop: 6 }}>Add one small habit to light your first spark.</Text>
           </View>
-        </View>
-
-        {/* All Badges & Upcoming Achievements */}
-        <View className="mb-10">
-          <Text style={{ color: colors.text }} className="text-base font-black mb-3 px-1">Badges & Achievements</Text>
-          <View 
-            style={{ backgroundColor: colors.surface, borderColor: colors.border }} 
-            className="rounded-3xl border p-5 shadow-sm"
-          >
-            {/* Collected Badges */}
-            {badges && badges.length > 0 && (
-              <View className="mb-6">
-                <Text style={{ color: colors.text }} className="text-sm font-bold mb-3">Collected ({badges.length})</Text>
-                <View className="flex-row flex-wrap -mx-1.5">
-                  {badges.map((badge: Badge, index: number) => (
-                    <View key={`collected-${index}`} className="w-1/3 px-1.5 mb-3">
-                      <View style={{ backgroundColor: colors.backgroundSecondary }} className="rounded-2xl p-3 items-center">
-                        <View style={{ backgroundColor: '#fbbf2415' }} className="w-10 h-10 rounded-2xl items-center justify-center mb-2">
-                          <Ionicons name="trophy" size={20} color="#fbbf24" />
-                        </View>
-                        <Text style={{ color: colors.text }} className="text-[10px] font-bold text-center leading-4" numberOfLines={2}>
-                          {badge.name}
-                        </Text>
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
-
-            {/* Upcoming (Locked) Badges */}
-            <View>
-              <Text style={{ color: colors.textMuted }} className="text-sm font-bold mb-3">Upcoming Milestones</Text>
-              <View className="flex-row flex-wrap -mx-1.5">
-                {AVAILABLE_BADGES.filter(b => !(badges || []).some((collected: Badge) => collected.name === b.name)).map((badge, index) => (
-                  <View key={`locked-${index}`} className="w-1/3 px-1.5 mb-3 opacity-50">
-                    <View style={{ backgroundColor: colors.backgroundSecondary, borderColor: colors.border }} className="rounded-2xl p-3 items-center border">
-                      <View style={{ backgroundColor: isDark ? '#27272a' : '#f4f4f5' }} className="w-10 h-10 rounded-2xl items-center justify-center mb-2">
-                        <Ionicons name="lock-closed" size={16} color={colors.textMuted} />
-                      </View>
-                      <Text style={{ color: colors.textMuted }} className="text-[10px] font-bold text-center leading-4" numberOfLines={2}>
-                        {badge.name}
-                      </Text>
-                    </View>
+        ) : (
+          <View style={{ marginBottom: 22 }}>
+            {activeHabits.map((habit: Habit) => {
+              const done = doneToday.has(habit.id);
+              const streak = streakByHabit.get(habit.id) || 0;
+              const color = habit.color || colors.primary;
+              return (
+                <Pressable
+                  key={habit.id}
+                  onPress={() => toggle(habit)}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: done }}
+                  accessibilityLabel={`${habit.title}${streak ? `, ${streak} day streak` : ''}`}
+                  style={({ pressed }) => ({
+                    ...card,
+                    borderRadius: 20,
+                    padding: 12,
+                    marginBottom: 10,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    opacity: pressed ? 0.85 : 1,
+                  })}
+                >
+                  <View style={{ width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: `${color}22`, marginRight: 12 }}>
+                    <Ionicons name={habitIcon(habit)} size={22} color={color} />
                   </View>
-                ))}
-              </View>
-            </View>
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{ color: done ? colors.textMuted : colors.text, fontSize: 16, fontWeight: '700', textDecorationLine: done ? 'line-through' : 'none' }}
+                      numberOfLines={1}
+                    >
+                      {habit.title}
+                    </Text>
+                    {streak > 0 && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                        <Ionicons name="flame" size={13} color={colors.primary} />
+                        <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '700', marginLeft: 3 }}>{streak} day streak</Text>
+                      </View>
+                    )}
+                  </View>
+                  <View
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 16,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: done ? colors.primary : 'transparent',
+                      borderWidth: done ? 0 : 2,
+                      borderColor: colors.borderSecondary,
+                    }}
+                  >
+                    {done && <Ionicons name="checkmark" size={18} color="#ffffff" />}
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+
+        {/* Quote */}
+        <View style={{ ...card, borderRadius: 24, padding: 18, flexDirection: 'row', marginBottom: 22 }}>
+          <Ionicons name="sparkles" size={18} color={colors.primary} style={{ marginTop: 2 }} />
+          <View style={{ flex: 1, marginLeft: 10 }}>
+            <Text style={{ color: colors.textSecondary, fontSize: 14, lineHeight: 21, fontStyle: 'italic' }}>“{quote.text}”</Text>
+            <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '700', marginTop: 8 }}>{quote.author}</Text>
           </View>
         </View>
+
+        {/* Badges */}
+        <Pressable
+          onPress={() => router.push('/badges')}
+          accessibilityRole="button"
+          accessibilityLabel="See all badges"
+          style={{ ...card, borderRadius: 24, padding: 16, flexDirection: 'row', alignItems: 'center' }}
+        >
+          <View style={{ width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft, marginRight: 12 }}>
+            <Ionicons name="trophy" size={22} color={colors.accent} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: colors.text, fontSize: 16, fontWeight: '700' }}>Badges</Text>
+            <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 2 }}>
+              {AVAILABLE_BADGES.filter((b) => badges?.some((c: Badge) => c.name === b.id || c.name === b.name)).length} of {AVAILABLE_BADGES.length} unlocked
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );
 }
-
-// Redesigned Stats Card Component
-const StatsCard = React.memo(function StatsCard({ title, value, subtitle, icon, colors, accentColor }: {
-  title: string;
-  value: string | number;
-  subtitle: string;
-  icon: string;
-  colors: any;
-  accentColor: string;
-}) {
-  return (
-    <View className="w-[48%] mb-4">
-      <View
-        style={{
-          backgroundColor: colors.surface,
-          borderColor: colors.border,
-        }}
-        className="rounded-3xl p-5 border shadow-sm"
-      >
-        <View 
-          style={{ backgroundColor: accentColor + '12' }} 
-          className="w-10 h-10 rounded-2xl items-center justify-center mb-4"
-        >
-          <Ionicons name={icon as any} size={20} color={accentColor} />
-        </View>
-        <View>
-          <Text style={{ color: colors.text }} className="text-2xl font-black tracking-tight">{value}</Text>
-          <Text style={{ color: colors.textSecondary }} className="text-xs font-bold mt-1.5">{title}</Text>
-          <Text style={{ color: colors.textMuted }} className="text-[10px] font-medium mt-0.5">{subtitle}</Text>
-        </View>
-      </View>
-    </View>
-  );
-});
-
-// Redesigned Quick Action Button Component
-const QuickActionButton = React.memo(function QuickActionButton({ icon, label, onPress, colors }: {
-  icon: string;
-  label: string;
-  onPress: () => void;
-  colors: any;
-}) {
-  return (
-    <Pressable 
-      className="items-center flex-1 mx-1 active:scale-95 active:opacity-80 transition-all" 
-      onPress={onPress}
-    >
-      <View
-        style={{ 
-          backgroundColor: colors.surface,
-          borderColor: colors.border,
-          maxWidth: 70,
-        }}
-        className="w-full aspect-square rounded-2xl items-center justify-center mb-2.5 border shadow-sm"
-      >
-        <Ionicons name={icon as any} size={24} color={colors.primary} />
-      </View>
-      <Text style={{ color: colors.textSecondary }} className="text-[10px] font-bold text-center mt-0.5">{label}</Text>
-    </Pressable>
-  );
-});
