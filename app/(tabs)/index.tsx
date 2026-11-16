@@ -6,7 +6,6 @@ import type { Badge } from '@/lib/api';
 import { StreakFlame } from '@/components/ui/StreakFlame';
 import { Tap } from '@/components/ui/Tap';
 import { BADGES as AVAILABLE_BADGES, findEarned } from '@/lib/badgeCatalog';
-import { SHOW_CHALLENGES } from '@/lib/constants';
 import { celebrate, toast } from '@/lib/celebrate';
 import { getToday, useAwardBadge, useBadges, useEntries, useHabits, useInsights, useStreaks, useToggleEntry } from '@/lib/hooks';
 import { habitArt } from '@/lib/habitArt';
@@ -325,7 +324,7 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        {/* Badges + Challenges */}
+        {/* Badges (challenges are hidden for now) */}
         <View style={{ flexDirection: 'row', gap: 10 }}>
           {[
             {
@@ -335,14 +334,7 @@ export default function DashboardScreen() {
               title: 'Badges',
               subtitle: `${AVAILABLE_BADGES.filter((b) => findEarned(badges, b)).length} of ${AVAILABLE_BADGES.length} earned`,
             },
-            {
-              key: 'challenges',
-              href: '/achievements' as const,
-              icon: 'flag' as IconName,
-              title: 'Challenges',
-              subtitle: 'Join one, earn XP',
-            },
-          ].filter((item) => SHOW_CHALLENGES || item.key !== 'challenges').map((item) => (
+          ].map((item) => (
             <Tap
               key={item.key}
               onPress={() => router.push(item.href)}

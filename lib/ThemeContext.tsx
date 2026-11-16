@@ -147,7 +147,8 @@ const THEME_STORAGE_KEY = 'focusflow_theme_mode';
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const systemColorScheme = useColorScheme();
-  const [mode, setModeState] = useState<ThemeMode>('system');
+  // Dark by default; a saved choice (Light / Auto) still wins
+  const [mode, setModeState] = useState<ThemeMode>('dark');
   const [isLoaded, setIsLoaded] = useState(false);
   
   // Load saved theme preference on mount
