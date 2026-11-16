@@ -113,7 +113,7 @@ function CelebrationCard({ event, onClose }: { event: CelebrationEvent; onClose:
           cardStyle,
         ]}
       >
-        <Mascot mood={event.mood ?? 'celebrate'} size={170} />
+        <Mascot mood={event.mood ?? 'celebrate'} source={event.image} size={180} />
 
         {event.highlight && (
           <View
@@ -141,6 +141,43 @@ function CelebrationCard({ event, onClose }: { event: CelebrationEvent; onClose:
         <Text style={{ color: colors.textMuted, fontSize: 15, lineHeight: 22, textAlign: 'center', marginTop: 8, marginBottom: 22 }}>
           {event.message}
         </Text>
+
+        {event.week && (
+          <View
+            accessibilityLabel={`This week: ${event.week.filter((d) => d.done).length} of 7 days`}
+            style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignSelf: 'stretch',
+              backgroundColor: colors.backgroundSecondary,
+              borderRadius: 20,
+              paddingVertical: 12,
+              paddingHorizontal: 10,
+              marginTop: -8,
+              marginBottom: 22,
+            }}
+          >
+            {event.week.map((d, i) => (
+              <View key={i} style={{ alignItems: 'center', flex: 1 }}>
+                <Text style={{ color: d.today ? colors.primary : colors.textMuted, fontSize: 12, fontWeight: '700', marginBottom: 6 }}>{d.label}</Text>
+                <View
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 14,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: d.done ? colors.primary : 'transparent',
+                    borderWidth: d.done ? 0 : 2,
+                    borderColor: d.today ? colors.primary : colors.borderSecondary,
+                  }}
+                >
+                  {d.done && <Ionicons name="checkmark" size={16} color="#ffffff" />}
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
 
         <GradientButton label={event.cta ?? 'Keep going'} onPress={onClose} size="lg" style={{ alignSelf: 'stretch' }} />
       </Animated.View>

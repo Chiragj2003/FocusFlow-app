@@ -3,7 +3,8 @@ import { GradientButton } from '@/components/ui/GradientButton';
 import { Mascot, MascotMood } from '@/components/ui/Mascot';
 import { ProgressRing } from '@/components/ui/ProgressRing';
 import type { Badge } from '@/lib/api';
-import { celebrate } from '@/lib/celebrate';
+import { StreakFlame } from '@/components/ui/StreakFlame';
+import { celebrate, toast } from '@/lib/celebrate';
 import { getToday, useAwardBadge, useBadges, useEntries, useHabits, useInsights, useStreaks, useToggleEntry } from '@/lib/hooks';
 import { messages } from '@/lib/messages';
 import { getDailyQuote } from '@/lib/quotes';
@@ -115,24 +116,20 @@ export default function DashboardScreen() {
       awardBadgeMutation.mutate(
         { name: badge.id, metadata: { displayName: badge.name, description: badge.description } },
         {
-          onSuccess: () =>
-            celebrate(
-              badge.streak > 0
-                ? {
-                    title: 'Streak milestone!',
-                    message: messages.streak(badge.streak),
-                    mood: 'streak',
-                    highlight: `${badge.streak} day streak`,
-                    highlightIcon: 'flame',
-                  }
-                : {
-                    title: 'Badge unlocked!',
-                    message: messages.badge(badge.description),
-                    mood: 'celebrate',
-                    highlight: badge.name,
-                    highlightIcon: 'trophy',
-                  }
-            ),
+          onSuccess: () => {
+            // Streak days already get the big streak screen; just note the badge.
+            if (badge.streak > 0) {
+              toast(`🏅 Badge earned: ${badge.name}`);
+              return;
+            }
+            celebrate({
+              title: 'Badge unlocked!',
+              message: messages.badge(badge.description),
+              mood: 'celebrate',
+              highlight: badge.name,
+              highlightIcon: 'trophy',
+            });
+          },
           onError: (err) => console.warn('[Home] Badge award stored locally:', err?.message),
         }
       );
@@ -146,7 +143,15 @@ export default function DashboardScreen() {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const mood: MascotMood =
-    todayTotal > 0 && todayCompleted >= todayTotal ? 'celebrate' : hour >= 22 || hour < 5 ? 'sleeping' : currentStreak >= 3 ? 'streak' : 'happy';
+    todayTotal > 0 && todayCompleted >= todayTotal
+      ? 'celebrate'
+      : hour >= 22 || hour < 5
+        ? 'sleeping'
+        : hour >= 18 && todayTotal > 0 && todayCompleted === 0
+          ? 'sad' // evening, nothing done yet: Sparky misses you
+          : currentStreak >= 3
+            ? 'streak'
+            : 'happy';
   const userName = user?.firstName || user?.emailAddresses?.[0]?.emailAddress?.split('@')[0] || 'friend';
 
   const onRefresh = useCallback(async () => {
@@ -221,7 +226,11 @@ export default function DashboardScreen() {
             { icon: 'bar-chart' as IconName, value: `${monthRate}%`, label: 'This month' },
           ].map((s) => (
             <View key={s.label} style={{ ...card, flex: 1, borderRadius: 20, paddingVertical: 14, paddingHorizontal: 12 }}>
-              <Ionicons name={s.icon} size={20} color={colors.primary} />
+              {s.icon === 'flame' ? (
+                <StreakFlame days={currentStreak} size={24} />
+              ) : (
+                <Ionicons name={s.icon} size={20} color={colors.primary} />
+              )}
               <Text style={{ color: colors.text, fontSize: 20, fontWeight: '800', marginTop: 6 }}>{s.value}</Text>
               <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 1 }}>{s.label}</Text>
             </View>
@@ -323,7 +332,7 @@ export default function DashboardScreen() {
                     </Text>
                     {streak > 0 && (
                       <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
-                        <Ionicons name="flame" size={13} color={colors.primary} />
+                        <StreakFlame days={streak} size={15} />
                         <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '700', marginLeft: 3 }}>{streak} day streak</Text>
                       </View>
                     )}

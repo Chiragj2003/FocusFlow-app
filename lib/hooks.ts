@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { flameForStreak, milestoneImage } from '@/components/ui/StreakFlame';
 import { celebrate } from './celebrate';
 import { messages } from './messages';
 import { notificationsManager } from './notifications';
@@ -418,11 +419,77 @@ export function useToggleEntry() {
     },
     onSuccess: (_data, vars) => {
       if (vars.completed) {
-        maybeCelebrateAllDone(vars.entryDate).catch((e) =>
-          console.warn('[useToggleEntry] Celebration check failed:', e)
-        );
+        (async () => {
+          // Streak first (first check-in of the day), then "perfect day" if that was the last one
+          await maybeCelebrateStreak(vars.entryDate, queryClient);
+          await maybeCelebrateAllDone(vars.entryDate);
+        })().catch((e) => console.warn('[useToggleEntry] Celebration check failed:', e));
       }
     },
+  });
+}
+
+const STREAK_CELEBRATED_KEY = '@focusflow_streak_celebrated_day';
+
+const localDateKey = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+/**
+ * Duolingo-style "streak extended" moment: shown once per day, on the first
+ * habit checked today. Uses the server streak (as of yesterday) + today, and
+ * the locally stored days as a cross-check.
+ */
+async function maybeCelebrateStreak(entryDate: string, queryClient: ReturnType<typeof useQueryClient>) {
+  const date = entryDate.split('T')[0];
+  const today = getToday();
+  if (date !== today) return;
+  if ((await AsyncStorage.getItem(STREAK_CELEBRATED_KEY)) === today) return;
+
+  const entries = await localStorage.getLocalEntries();
+  const doneDays = new Set(entries.filter((e) => e.completed).map((e) => e.entryDate.split('T')[0]));
+  if (!doneDays.has(today)) return;
+
+  // Consecutive days ending today, from what's stored on the phone
+  let localRun = 0;
+  const cursor = new Date();
+  while (doneDays.has(localDateKey(cursor))) {
+    localRun++;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+
+  // Server streak was computed before today's check-in
+  const server = queryClient.getQueryData<{ currentStreak?: number }>(queryKeys.streaks)?.currentStreak ?? 0;
+  const yesterdayDone = localRun >= 2 || server > 0;
+  const streak = Math.max(localRun, yesterdayDone ? server + 1 : 1);
+
+  await AsyncStorage.setItem(STREAK_CELEBRATED_KEY, today);
+
+  // Week strip: Monday → Sunday of this week
+  const now = new Date();
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  const labels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  const week = labels.map((label, i) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    const key = localDateKey(d);
+    const daysAgo = Math.round((new Date(today).getTime() - new Date(key).getTime()) / 86400000);
+    return {
+      label,
+      today: key === today,
+      // Done if stored locally, or if it falls inside the current streak
+      done: doneDays.has(key) || (daysAgo >= 0 && daysAgo < streak),
+    };
+  });
+
+  const milestone = milestoneImage(streak);
+
+  celebrate({
+    title: milestone ? `${streak} day milestone!` : streak === 1 ? 'Streak started!' : `${streak} day streak!`,
+    message: streak === 1 ? 'Day one. Come back tomorrow to grow your flame.' : messages.streak(streak),
+    image: milestone ?? flameForStreak(streak),
+    week,
+    cta: streak === 1 ? 'Let’s go' : 'Keep it burning',
   });
 }
 

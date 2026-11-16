@@ -4,11 +4,22 @@
  * <CelebrationHost /> in the root layout renders them.
  */
 import type { MascotMood } from '@/components/ui/Mascot';
+import type { ImageSourcePropType } from 'react-native';
+
+export interface WeekDay {
+  label: string; // "M", "T", ...
+  done: boolean;
+  today: boolean;
+}
 
 export interface CelebrationEvent {
   title: string;
   message: string;
   mood?: MascotMood;
+  /** Big image instead of the mascot pose (streak flame, milestone scene) */
+  image?: ImageSourcePropType;
+  /** Duolingo-style week strip under the title */
+  week?: WeekDay[];
   /** Short label shown in the pill, e.g. "7 Days" */
   highlight?: string;
   highlightIcon?: 'flame' | 'trophy' | 'time' | 'checkmark-circle' | 'sparkles' | 'star';
