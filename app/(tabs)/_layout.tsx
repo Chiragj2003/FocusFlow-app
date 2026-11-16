@@ -2,7 +2,8 @@ import { useTheme } from '@/lib/ThemeContext';
 import { useAuth } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
 import { Redirect, Tabs } from 'expo-router';
-import React from 'react';
+import { hasSeenOnboarding } from '@/lib/onboarding';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -36,9 +37,14 @@ export default function TabLayout() {
   const { isSignedIn, isLoaded } = useAuth();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const [onboarded, setOnboarded] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    hasSeenOnboarding().then(setOnboarded);
+  }, []);
 
   // Show loading while Clerk initializes
-  if (!isLoaded) {
+  if (!isLoaded || (isSignedIn && onboarded === null)) {
     return (
       <View style={{ backgroundColor: colors.background }} className="flex-1 items-center justify-center">
         <ActivityIndicator size="large" color={colors.primary} />
@@ -49,6 +55,11 @@ export default function TabLayout() {
   // Redirect to sign-in if not authenticated
   if (!isSignedIn) {
     return <Redirect href="/(auth)/sign-in" />;
+  }
+
+  // First launch on this device: show the 3-screen intro once
+  if (onboarded === false) {
+    return <Redirect href="/onboarding" />;
   }
 
   const bottomPad = Math.max(insets.bottom, 10);

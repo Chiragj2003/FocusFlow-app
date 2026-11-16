@@ -329,7 +329,7 @@ export default function HabitsScreen() {
               </Pressable>
               <Pressable onPress={() => router.push('/achievements')} accessibilityRole="button" style={chip(false)}>
                 <Ionicons name="trophy-outline" size={15} color={colors.textMuted} />
-                <Text style={{ color: colors.textSecondary, fontWeight: '600', fontSize: 13, marginLeft: 6 }}>Challenges</Text>
+                <Text style={{ color: colors.textSecondary, fontWeight: '600', fontSize: 13, marginLeft: 6 }}>Achievements</Text>
               </Pressable>
             </ScrollView>
           </>
