@@ -14,7 +14,7 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ALL_ACHIEVEMENTS } from '@/lib/constants';
+import { ACTIVE_ACHIEVEMENTS } from '@/lib/constants';
 import { useUserChallenges, useJoinChallenge } from '@/lib/hooks';
 import { toast } from '@/lib/celebrate';
 import { CHALLENGE_ART } from '@/lib/artAssets';
@@ -194,7 +194,7 @@ export default function AchievementsScreen() {
 
   const handleJoin = async (id: string) => {
     setIsJoiningId(id);
-    const title = ALL_ACHIEVEMENTS.find((a: any) => a.id === id)?.title ?? 'this challenge';
+    const title = ACTIVE_ACHIEVEMENTS.find((a: any) => a.id === id)?.title ?? 'this challenge';
     try {
       await joinChallenge.mutateAsync(id);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -206,6 +206,8 @@ export default function AchievementsScreen() {
         // Already joined on the server: just refresh the list
         refetchUserChallenges();
         toast({ tone: 'info', message: `You’ve already joined “${title}”.` });
+      } else if (status === 404) {
+        toast({ tone: 'error', message: `“${title}” isn’t available yet. Pull down to refresh and try again.` });
       } else if (!error?.response) {
         toast({ tone: 'error', message: 'You’re offline. Connect to the internet to join a challenge.' });
       } else {
@@ -219,12 +221,12 @@ export default function AchievementsScreen() {
 
   const isLoading = userChallengesLoading;
 
-  const available = ALL_ACHIEVEMENTS.filter(
+  const available = ACTIVE_ACHIEVEMENTS.filter(
     (c: any) => !userChallenges?.some((uc: any) => uc.challengeId === c.id)
   );
   
   const joined = (userChallenges || []).filter((uc: any) => 
-    ALL_ACHIEVEMENTS.some((c: any) => c.id === uc.challengeId)
+    ACTIVE_ACHIEVEMENTS.some((c: any) => c.id === uc.challengeId)
   );
 
   return (
@@ -317,7 +319,7 @@ export default function AchievementsScreen() {
               </View>
             ) : (
               joined.map((uc: any) => {
-                const achievement = ALL_ACHIEVEMENTS.find((c: any) => c.id === uc.challengeId);
+                const achievement = ACTIVE_ACHIEVEMENTS.find((c: any) => c.id === uc.challengeId);
                 if (!achievement) return null;
                 return (
                   <AchievementCard
