@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
+import { toast } from './celebrate';
 import { habitsApi, entriesApi, badgesApi, focusSessionsApi, Habit, HabitEntry, Badge } from './api';
 
 // Storage Keys
@@ -12,7 +13,11 @@ const STORAGE_KEYS = {
   LAST_SYNC: '@focusflow_last_sync_timestamp',
   ID_MAP: '@focusflow_temp_id_map',
   OWNER: '@focusflow_local_owner',
+  RECENT_CREATES: '@focusflow_recent_creates',
 };
+
+/** How long a freshly synced habit is kept even if the server list doesn't show it yet. */
+const RECENT_CREATE_GRACE_MS = 10 * 60 * 1000;
 
 const MAX_RETRIES = 5;
 
@@ -179,10 +184,16 @@ class LocalStorageManager {
     return this.withLock(async () => {
       const local = await this.getLocalHabits();
       const remoteIds = new Set(remote.map((h) => h.id));
+      // Habits created moments ago may not be in the server's list yet
+      // (replica/cache lag). Keep them for a grace period so they don't vanish.
+      const recent = await this.getRecentCreates();
+      const now = Date.now();
       const keep = local.filter(
         (h) =>
           !remoteIds.has(h.id) &&
-          (isTempId(h.id) || (active !== undefined && h.active !== active))
+          (isTempId(h.id) ||
+            (active !== undefined && h.active !== active) ||
+            (recent[h.id] !== undefined && now - recent[h.id] < RECENT_CREATE_GRACE_MS))
       );
       const merged = [...keep, ...remote];
       await this.saveLocalHabits(merged);
@@ -350,6 +361,34 @@ class LocalStorageManager {
   }
 
   // ==========================================
+  // RECENTLY CREATED HABITS (server id -> synced at)
+  // ==========================================
+
+  private async getRecentCreates(): Promise<Record<string, number>> {
+    try {
+      const data = await AsyncStorage.getItem(STORAGE_KEYS.RECENT_CREATES);
+      return data ? JSON.parse(data) : {};
+    } catch {
+      return {};
+    }
+  }
+
+  private async addRecentCreate(serverId: string): Promise<void> {
+    const recent = await this.getRecentCreates();
+    const now = Date.now();
+    // Drop expired entries so the map stays small
+    for (const id of Object.keys(recent)) {
+      if (now - recent[id] > RECENT_CREATE_GRACE_MS) delete recent[id];
+    }
+    recent[serverId] = now;
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.RECENT_CREATES, JSON.stringify(recent));
+    } catch (e) {
+      console.warn('[LocalStorage] Failed to save recent creates:', e);
+    }
+  }
+
+  // ==========================================
   // TEMP ID -> SERVER ID MAP (persisted)
   // ==========================================
 
@@ -495,6 +534,7 @@ class LocalStorageManager {
 
             const habits = await this.getLocalHabits();
             await this.saveLocalHabits(habits.map((h) => (h.id === tempId ? serverHabit : h)));
+            await this.addRecentCreate(serverHabit.id);
 
             const entries = await this.getLocalEntries();
             await this.saveLocalEntries(
@@ -597,9 +637,11 @@ class LocalStorageManager {
         attempted.add(action.id);
 
         let outcome: ActionOutcome;
+        let failure: any = null;
         try {
           outcome = await this.runAction(action, idMap, cycleUser);
         } catch (err) {
+          failure = err;
           outcome = this.outcomeForError(action, err);
         }
 
@@ -636,7 +678,16 @@ class LocalStorageManager {
               const tempId = action.payload.tempId;
               next = next.filter((a) => !referencesHabit(a, tempId));
               const habits = await this.getLocalHabits();
+              const rejected = habits.find((h) => h.id === tempId);
               await this.saveLocalHabits(habits.filter((h) => h.id !== tempId));
+              // Tell the user instead of letting the habit silently disappear.
+              const serverMsg = failure?.response?.data?.error || failure?.response?.data?.message;
+              toast({
+                tone: 'error',
+                message: `Couldn’t save “${rejected?.title ?? action.payload?.data?.title ?? 'habit'}”${
+                  serverMsg ? `: ${serverMsg}` : '. Please try again.'
+                }`,
+              });
             }
             await this.saveSyncQueue(next);
           });

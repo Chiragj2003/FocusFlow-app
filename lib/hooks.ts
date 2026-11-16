@@ -1,4 +1,7 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { celebrate } from './celebrate';
+import { messages } from './messages';
 import { notificationsManager } from './notifications';
 import { localStorage } from './localStorage';
 import {
@@ -413,6 +416,42 @@ export function useToggleEntry() {
     onError: (err) => {
       console.warn('[useToggleEntry] Failed to save entry locally:', err);
     },
+    onSuccess: (_data, vars) => {
+      if (vars.completed) {
+        maybeCelebrateAllDone(vars.entryDate).catch((e) =>
+          console.warn('[useToggleEntry] Celebration check failed:', e)
+        );
+      }
+    },
+  });
+}
+
+const CELEBRATED_DAY_KEY = '@focusflow_celebrated_day';
+
+/** Shows the "Perfect day" celebration once, when the last habit of today is checked. */
+async function maybeCelebrateAllDone(entryDate: string) {
+  const date = entryDate.split('T')[0];
+  if (date !== getToday()) return;
+
+  const habits = (await localStorage.getLocalHabits()).filter((h) => h.active !== false);
+  if (habits.length === 0) return;
+
+  const entries = await localStorage.getLocalEntries();
+  const done = new Set(
+    entries.filter((e) => e.completed && e.entryDate.split('T')[0] === date).map((e) => e.habitId)
+  );
+  if (!habits.every((h) => done.has(h.id))) return;
+
+  if ((await AsyncStorage.getItem(CELEBRATED_DAY_KEY)) === date) return;
+  await AsyncStorage.setItem(CELEBRATED_DAY_KEY, date);
+
+  celebrate({
+    title: 'Perfect day!',
+    message: messages.allDone(),
+    mood: 'checklist',
+    highlight: `${habits.length}/${habits.length} habits`,
+    highlightIcon: 'checkmark-circle',
+    cta: 'Awesome',
   });
 }
 

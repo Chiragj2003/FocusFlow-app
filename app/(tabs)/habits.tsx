@@ -1,8 +1,10 @@
 import { HabitGridMobile } from '@/components/HabitGridMobile';
-import { useTheme } from '@/lib/ThemeContext';
+import { GradientButton } from '@/components/ui/GradientButton';
+import { Mascot } from '@/components/ui/Mascot';
+import { ProgressRing } from '@/components/ui/ProgressRing';
+import { ActionSheet, ConfirmSheet, Sheet } from '@/components/ui/Sheet';
+import { toast } from '@/lib/celebrate';
 import {
-  getMonthDays,
-  getMonthRange,
   getToday,
   useArchiveHabit,
   useCreateHabit,
@@ -10,292 +12,66 @@ import {
   useEntries,
   useHabits,
   useRestoreHabit,
-  useToggleEntry
+  useToggleEntry,
 } from '@/lib/hooks';
+import { messages } from '@/lib/messages';
 import { HABIT_TEMPLATES, getTemplateCategories } from '@/lib/templates';
+import { useTheme } from '@/lib/ThemeContext';
 import type { Habit, HabitEntry, HabitTemplate } from '@/lib/types';
-import { useAuth } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { LinearGradient } from 'expo-linear-gradient';
-import { StatusBar } from 'expo-status-bar';
-import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Pressable, RefreshControl, ScrollView, Text, TextInput, View, KeyboardAvoidingView, Platform } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-
+import { StatusBar } from 'expo-status-bar';
+import React, { useCallback, useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Habit colors matching the web app
 const habitColors = [
   '#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6',
-  '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#ec4899'
+  '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#ec4899',
 ];
 
-// Categories
 const categories = ['Health', 'Learning', 'Mindfulness', 'Productivity', 'Fitness', 'Other'];
 
-// Local fallback colors and patterns for guest/offline AI habit generation
-const LOCAL_CATEGORY_COLORS: Record<string, string> = {
-  Health: '#22c55e',
-  Fitness: '#ef4444',
-  Mindfulness: '#a855f7',
-  Learning: '#3b82f6',
-  Productivity: '#f59e0b',
-  Social: '#ec4899',
-  Creative: '#8b5cf6',
-  Other: '#71717a',
-};
-
-const LOCAL_HABIT_PATTERNS = [
-  {
-    keywords: ['water', 'drink', 'hydrate', 'hydration'],
-    habit: {
-      title: 'Stay Hydrated',
-      description: 'Drink enough water to keep your body healthy and energized',
-      category: 'Health',
-      color: LOCAL_CATEGORY_COLORS.Health,
-      goalType: 'quantity' as const,
-      goalTarget: 8,
-      unit: 'glasses',
-    },
-  },
-  {
-    keywords: ['meditate', 'meditation', 'mindful', 'calm', 'peace'],
-    habit: {
-      title: 'Daily Meditation',
-      description: 'Take time to calm your mind and practice mindfulness',
-      category: 'Mindfulness',
-      color: LOCAL_CATEGORY_COLORS.Mindfulness,
-      goalType: 'duration' as const,
-      goalTarget: 10,
-      unit: 'minutes',
-    },
-  },
-  {
-    keywords: ['read', 'book', 'reading', 'literature'],
-    habit: {
-      title: 'Read Daily',
-      description: 'Expand your knowledge through consistent reading',
-      category: 'Learning',
-      color: LOCAL_CATEGORY_COLORS.Learning,
-      goalType: 'duration' as const,
-      goalTarget: 30,
-      unit: 'minutes',
-    },
-  },
-  {
-    keywords: ['exercise', 'workout', 'gym', 'fitness', 'train'],
-    habit: {
-      title: 'Daily Exercise',
-      description: 'Stay fit and healthy with regular physical activity',
-      category: 'Fitness',
-      color: LOCAL_CATEGORY_COLORS.Fitness,
-      goalType: 'duration' as const,
-      goalTarget: 30,
-      unit: 'minutes',
-    },
-  },
-  {
-    keywords: ['walk', 'steps', 'walking', 'stroll'],
-    habit: {
-      title: 'Daily Walk',
-      description: 'Get moving with a refreshing daily walk',
-      category: 'Fitness',
-      color: LOCAL_CATEGORY_COLORS.Fitness,
-      goalType: 'quantity' as const,
-      goalTarget: 10000,
-      unit: 'steps',
-    },
-  },
-  {
-    keywords: ['sleep', 'rest', 'bed', 'early'],
-    habit: {
-      title: 'Quality Sleep',
-      description: 'Prioritize rest for better health and productivity',
-      category: 'Health',
-      color: LOCAL_CATEGORY_COLORS.Health,
-      goalType: 'duration' as const,
-      goalTarget: 8,
-      unit: 'hours',
-    },
-  },
-  {
-    keywords: ['journal', 'write', 'diary', 'gratitude', 'reflect'],
-    habit: {
-      title: 'Daily Journaling',
-      description: 'Reflect on your day and cultivate gratitude',
-      category: 'Mindfulness',
-      color: LOCAL_CATEGORY_COLORS.Mindfulness,
-      goalType: 'binary' as const,
-    },
-  },
-  {
-    keywords: ['yoga', 'stretch', 'flexibility'],
-    habit: {
-      title: 'Practice Yoga',
-      description: 'Improve flexibility and mental clarity through yoga',
-      category: 'Fitness',
-      color: LOCAL_CATEGORY_COLORS.Fitness,
-      goalType: 'duration' as const,
-      goalTarget: 20,
-      unit: 'minutes',
-    },
-  },
-  {
-    keywords: ['learn', 'study', 'course', 'skill', 'language'],
-    habit: {
-      title: 'Learn Something New',
-      description: 'Invest in yourself by learning daily',
-      category: 'Learning',
-      color: LOCAL_CATEGORY_COLORS.Learning,
-      goalType: 'duration' as const,
-      goalTarget: 15,
-      unit: 'minutes',
-    },
-  },
-  {
-    keywords: ['code', 'program', 'develop', 'coding'],
-    habit: {
-      title: 'Code Daily',
-      description: 'Build your programming skills with daily practice',
-      category: 'Learning',
-      color: LOCAL_CATEGORY_COLORS.Learning,
-      goalType: 'duration' as const,
-      goalTarget: 30,
-      unit: 'minutes',
-    },
-  },
-  {
-    keywords: ['save', 'money', 'budget', 'invest'],
-    habit: {
-      title: 'Track Finances',
-      description: 'Stay on top of your financial goals',
-      category: 'Other',
-      color: LOCAL_CATEGORY_COLORS.Other,
-      goalType: 'binary' as const,
-    },
-  },
-  {
-    keywords: ['healthy', 'eat', 'nutrition', 'vegetable', 'fruit', 'diet'],
-    habit: {
-      title: 'Eat Healthy',
-      description: 'Nourish your body with nutritious food choices',
-      category: 'Health',
-      color: LOCAL_CATEGORY_COLORS.Health,
-      goalType: 'quantity' as const,
-      goalTarget: 5,
-      unit: 'servings',
-    },
-  },
-  {
-    keywords: ['social', 'friend', 'family', 'call', 'connect'],
-    habit: {
-      title: 'Stay Connected',
-      description: 'Maintain meaningful relationships with loved ones',
-      category: 'Other',
-      color: LOCAL_CATEGORY_COLORS.Other,
-      goalType: 'binary' as const,
-    },
-  },
-  {
-    keywords: ['art', 'draw', 'paint', 'create', 'creative', 'music'],
-    habit: {
-      title: 'Creative Practice',
-      description: 'Express yourself through creative activities',
-      category: 'Creative',
-      color: LOCAL_CATEGORY_COLORS.Creative,
-      goalType: 'duration' as const,
-      goalTarget: 20,
-      unit: 'minutes',
-    },
-  },
-  {
-    keywords: ['focus', 'productive', 'work', 'task', 'deep'],
-    habit: {
-      title: 'Deep Focus Work',
-      description: 'Accomplish more with dedicated focus time',
-      category: 'Productivity',
-      color: LOCAL_CATEGORY_COLORS.Productivity,
-      goalType: 'duration' as const,
-      goalTarget: 60,
-      unit: 'minutes',
-    },
-  },
-];
-
-function generateHabitLocally(userInput: string) {
-  const lowerInput = userInput.toLowerCase();
-  
-  for (const pattern of LOCAL_HABIT_PATTERNS) {
-    if (pattern.keywords.some(keyword => lowerInput.includes(keyword))) {
-      const numberMatch = userInput.match(/(\d+)/g);
-      if (numberMatch && pattern.habit.goalTarget) {
-        return {
-          ...pattern.habit,
-          goalTarget: parseInt(numberMatch[0], 10),
-        };
-      }
-      return pattern.habit;
-    }
-  }
-  
-  const capitalizedInput = userInput.charAt(0).toUpperCase() + userInput.slice(1).toLowerCase();
-  const shortTitle = capitalizedInput.split(' ').slice(0, 4).join(' ');
-  
-  return {
-    title: shortTitle.length > 30 ? shortTitle.slice(0, 30) + '...' : shortTitle,
-    description: `Make "${userInput}" a daily habit`,
-    category: 'Other',
-    color: LOCAL_CATEGORY_COLORS.Other,
-    goalType: 'binary' as const,
-  };
-}
+const normalizeTitle = (t: string) => t.trim().toLowerCase().replace(/\s+/g, ' ');
 
 export default function HabitsScreen() {
   const router = useRouter();
   const { isDark, colors } = useTheme();
-  const { isSignedIn } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [selectedTemplateCategory, setSelectedTemplateCategory] = useState<string | null>(null);
+  const [manageHabit, setManageHabit] = useState<Habit | null>(null);
+  const [confirm, setConfirm] = useState<{ kind: 'archive' | 'delete'; habit: Habit } | null>(null);
 
   // Form state
   const [newHabitTitle, setNewHabitTitle] = useState('');
   const [newHabitDescription, setNewHabitDescription] = useState('');
-  const [selectedColor, setSelectedColor] = useState(habitColors[0]);
+  const [selectedColor, setSelectedColor] = useState(habitColors[1]);
   const [selectedCategory, setSelectedCategory] = useState('');
   const [goalType, setGoalType] = useState<'binary' | 'duration' | 'quantity'>('binary');
   const [goalTarget, setGoalTarget] = useState('');
   const [goalUnit, setGoalUnit] = useState('');
 
-  // Get current date info
+  // Last 5 days (oldest first), local dates
   const today = getToday();
   const last5Days = useMemo(() => {
     const days: string[] = [];
     for (let i = 4; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
-      const yyyy = d.getFullYear();
-      const mm = String(d.getMonth() + 1).padStart(2, '0');
-      const dd = String(d.getDate()).padStart(2, '0');
-      days.push(`${yyyy}-${mm}-${dd}`);
+      days.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
     }
     return days;
   }, []);
 
-  const { start, end } = useMemo(() => {
-    return {
-      start: last5Days[0],
-      end: last5Days[4],
-    };
-  }, [last5Days]);
-
-  // Fetch data
+  // Data
   const { data: activeHabits, isLoading: habitsLoading, refetch: refetchHabits } = useHabits(true);
   const { data: archivedHabits, refetch: refetchArchived } = useHabits(false);
-  const { data: entries, refetch: refetchEntries } = useEntries(start, end);
+  const { data: entries, refetch: refetchEntries } = useEntries(last5Days[0], last5Days[4]);
 
   // Mutations
   const createHabit = useCreateHabit();
@@ -305,32 +81,22 @@ export default function HabitsScreen() {
   const toggleEntry = useToggleEntry();
 
   const habits = showArchived ? archivedHabits : activeHabits;
+  const activeCount = activeHabits?.length || 0;
 
-  // Get today's entries for each habit - with memoized lookup for performance
-  const entriesMap = useMemo(() => {
-    if (!entries) return new Map<string, HabitEntry>();
-    const map = new Map<string, HabitEntry>();
-    entries.forEach((e: HabitEntry) => {
-      map.set(`${e.habitId}-${e.entryDate}`, e);
-    });
-    return map;
-  }, [entries]);
+  const completedToday = useMemo(() => {
+    if (!entries || !activeHabits) return 0;
+    const done = new Set(
+      entries.filter((e: HabitEntry) => e.completed && e.entryDate.split('T')[0] === today).map((e: HabitEntry) => e.habitId)
+    );
+    return activeHabits.filter((h: Habit) => done.has(h.id)).length;
+  }, [entries, activeHabits, today]);
 
-  const getTodayEntry = useCallback((habitId: string) => {
-    return entriesMap.get(`${habitId}-${today}`);
-  }, [entriesMap, today]);
+  const progress = activeCount > 0 ? completedToday / activeCount : 0;
 
-  // Calculate completion stats
-  const completedCount = useMemo(() => {
-    return activeHabits?.filter((h: Habit) => {
-      const entry = getTodayEntry(h.id);
-      return entry?.completed;
-    }).length || 0;
-  }, [activeHabits, getTodayEntry]);
-
-  const progressPercent = activeHabits && activeHabits.length > 0
-    ? Math.round((completedCount / activeHabits.length) * 100)
-    : 0;
+  const activeTitles = useMemo(
+    () => new Set((activeHabits || []).map((h: Habit) => normalizeTitle(h.title))),
+    [activeHabits]
+  );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -338,747 +104,519 @@ export default function HabitsScreen() {
     setRefreshing(false);
   }, [refetchHabits, refetchArchived, refetchEntries]);
 
-  // Fast toggle handler
-  const handleToggleHabit = useCallback((habitId: string) => {
-    const currentEntry = getTodayEntry(habitId);
-    const newCompleted = !currentEntry?.completed;
+  const handleGridToggle = useCallback(
+    (habitId: string, date: string, completed: boolean) => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      toggleEntry.mutate({ habitId, entryDate: date, completed });
+    },
+    [toggleEntry]
+  );
 
-    // Haptic feedback
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
-
-    // Fire mutation - uses optimistic update for instant UI feedback
-    toggleEntry.mutate(
-      {
-        habitId,
-        entryDate: today,
-        completed: newCompleted,
-      },
-      {
-        onError: (error) => {
-          console.error('Failed to toggle habit:', error);
-          Alert.alert('Error', 'Failed to update habit. Please try again.');
-        },
-      }
-    );
-  }, [getTodayEntry, today, toggleEntry]);
-
-  const handleAddHabit = useCallback(() => {
-    if (!newHabitTitle.trim()) {
-      Alert.alert('Error', 'Please enter a habit name');
-      return;
-    }
-
-    const titleNormalized = newHabitTitle.trim().toLowerCase().replace(/\s+/g, ' ');
-    const isDuplicate = activeHabits?.some((h: Habit) => h.title.trim().toLowerCase().replace(/\s+/g, ' ') === titleNormalized);
-    if (isDuplicate) {
-      Alert.alert('Duplicate Habit', 'A habit with this name already exists.');
-      return;
-    }
-
-    // Reset form immediately
+  const resetForm = () => {
     setNewHabitTitle('');
     setNewHabitDescription('');
     setSelectedCategory('');
     setGoalType('binary');
     setGoalTarget('');
     setGoalUnit('');
-    setShowTemplates(false);
+  };
+
+  const closeModal = () => {
     setIsModalOpen(false);
+    setShowTemplates(false);
+  };
 
-    createHabit.mutate({
-      title: newHabitTitle.trim(),
-      description: newHabitDescription.trim() || undefined,
-      category: selectedCategory || undefined,
-      color: selectedColor,
-      goalType: goalType,
-      goalTarget: goalTarget ? parseInt(goalTarget) : undefined,
-      unit: goalUnit || undefined,
-    }, {
-      onError: (error: any) => {
-        console.error('Failed to create habit:', error);
-        const serverMsg = error?.response?.data?.error || error?.response?.data?.details || error?.message;
-        Alert.alert('Error', serverMsg || 'Failed to create habit. Please try again.');
-      }
-    });
-  }, [newHabitTitle, newHabitDescription, selectedCategory, selectedColor, goalType, goalTarget, goalUnit, createHabit, activeHabits]);
+  const openNewHabit = () => {
+    setShowTemplates(false);
+    setIsModalOpen(true);
+  };
 
-  const handleSelectTemplate = useCallback((template: HabitTemplate) => {
-    const titleNormalized = template.title.trim().toLowerCase().replace(/\s+/g, ' ');
-    const isDuplicate = activeHabits?.some((h: Habit) => h.title.trim().toLowerCase().replace(/\s+/g, ' ') === titleNormalized);
-    if (isDuplicate) {
-      Alert.alert('Duplicate Habit', `A habit named "${template.title}" already exists.`);
+  const openTemplates = () => {
+    setShowTemplates(true);
+    setIsModalOpen(true);
+  };
+
+  const handleAddHabit = useCallback(() => {
+    const title = newHabitTitle.trim();
+    if (!title) {
+      toast({ tone: 'error', message: 'Give your habit a name first.' });
+      return;
+    }
+    if (activeTitles.has(normalizeTitle(title))) {
+      toast({ tone: 'error', message: `You already have a habit called “${title}”.` });
       return;
     }
 
-    // Show confirmation with Save button
-    Alert.alert(
-      'Add Template',
-      `Add "${template.title}" as a new habit?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Save',
-          onPress: () => {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            setShowTemplates(false);
-            setIsModalOpen(false);
-
-            createHabit.mutate({
-              title: template.title,
-              description: template.description,
-              category: template.category,
-              color: template.color,
-              goalType: template.goalType,
-              goalTarget: template.goalTarget,
-              unit: template.unit,
-            }, {
-              onError: (error: any) => {
-                console.error('Failed to create habit from template:', error);
-                const serverMsg = error?.response?.data?.error || error?.response?.data?.details || error?.message;
-                Alert.alert('Error', serverMsg || 'Failed to create habit. Please try again.');
-              }
-            });
-          }
-        },
-      ]
+    createHabit.mutate(
+      {
+        title,
+        description: newHabitDescription.trim() || undefined,
+        category: selectedCategory || undefined,
+        color: selectedColor,
+        goalType,
+        goalTarget: goalTarget ? parseInt(goalTarget, 10) : undefined,
+        unit: goalUnit || undefined,
+      },
+      {
+        onSuccess: () => toast(activeCount === 0 ? messages.firstHabit() : messages.habitAdded(title)),
+        onError: () => toast({ tone: 'error', message: 'Couldn’t save this habit. Please try again.' }),
+      }
     );
-  }, [createHabit, activeHabits]);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    resetForm();
+    closeModal();
+  }, [newHabitTitle, newHabitDescription, selectedCategory, selectedColor, goalType, goalTarget, goalUnit, createHabit, activeTitles, activeCount]);
 
-  const handleArchiveHabit = useCallback((habit: Habit) => {
-    Alert.alert(
-      'Archive Habit',
-      `Are you sure you want to archive "${habit.title}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
+  const handleAddTemplate = useCallback(
+    (template: HabitTemplate) => {
+      if (activeTitles.has(normalizeTitle(template.title))) {
+        toast({ tone: 'info', message: `“${template.title}” is already in your habits.` });
+        return;
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      createHabit.mutate(
         {
-          text: 'Archive',
-          onPress: () => {
-            archiveHabit.mutate(habit.id, {
-              onError: () => Alert.alert('Error', 'Failed to archive habit.')
-            });
-          }
+          title: template.title,
+          description: template.description,
+          category: template.category,
+          color: template.color,
+          goalType: template.goalType,
+          goalTarget: template.goalTarget,
+          unit: template.unit,
         },
-      ]
-    );
-  }, [archiveHabit]);
-
-  const handleRestoreHabit = useCallback((habit: Habit) => {
-    restoreHabit.mutate(habit.id, {
-      onError: () => Alert.alert('Error', 'Failed to restore habit.')
-    });
-  }, [restoreHabit]);
-
-  const handleDeleteHabit = useCallback((habit: Habit) => {
-    Alert.alert(
-      'Delete Habit',
-      `Are you sure you want to permanently delete "${habit.title}"? This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            deleteHabit.mutate(habit.id, {
-              onError: () => Alert.alert('Error', 'Failed to delete habit.')
-            });
-          }
-        },
-      ]
-    );
-  }, [deleteHabit]);
+          onSuccess: () => toast(messages.habitAdded(template.title)),
+          onError: () => toast({ tone: 'error', message: 'Couldn’t add this template. Please try again.' }),
+        }
+      );
+    },
+    [createHabit, activeTitles]
+  );
 
-  // Only show loading screen on first load when there's NO cached data
-  // With our caching system, we should almost always have data immediately
+  const runConfirm = () => {
+    if (!confirm) return;
+    const { kind, habit } = confirm;
+    if (kind === 'archive') {
+      archiveHabit.mutate(habit.id, { onSuccess: () => toast(`“${habit.title}” archived.`) });
+    } else {
+      deleteHabit.mutate(habit.id, { onSuccess: () => toast(`“${habit.title}” deleted.`) });
+    }
+  };
+
+  const restore = (habit: Habit) => {
+    restoreHabit.mutate(habit.id, { onSuccess: () => toast(`“${habit.title}” is back in your habits.`) });
+  };
+
+  // Only show the loading screen on the very first load with no cached data
   if (habitsLoading && !activeHabits && !refreshing) {
     return (
-      <SafeAreaView edges={['top']} style={{ backgroundColor: colors.background }} className="flex-1 items-center justify-center">
+      <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={{ color: colors.textMuted }} className="mt-4">Loading habits...</Text>
+        <Text style={{ color: colors.textMuted, marginTop: 12 }}>Loading your habits…</Text>
       </SafeAreaView>
     );
   }
 
+  const card = { backgroundColor: colors.card, borderColor: colors.cardBorder, borderWidth: 1, borderRadius: 24 } as const;
+  const chip = (active: boolean) => ({
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    paddingHorizontal: 14,
+    height: 36,
+    borderRadius: 999,
+    borderWidth: 1,
+    backgroundColor: active ? colors.primarySoft : colors.card,
+    borderColor: active ? 'rgba(249,115,22,0.45)' : colors.cardBorder,
+  });
+
   return (
-    <SafeAreaView edges={['top']} style={{ backgroundColor: colors.background }} className="flex-1">
+    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.background }}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <ScrollView
-        className="flex-1 px-4"
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
-        }
+        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header - Web Aligned */}
-        <View className="flex-row items-center justify-between mb-4 mt-2">
-          <View>
-            <Text style={{ color: colors.text }} className="text-3xl font-bold">Habits</Text>
-            <Text style={{ color: colors.textMuted }} className="text-base text-zinc-400">
-              Track your daily habits and build consistency
+        {/* Header */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, marginBottom: 18 }}>
+          {showArchived && (
+            <Pressable
+              onPress={() => setShowArchived(false)}
+              accessibilityRole="button"
+              accessibilityLabel="Back to habits"
+              style={{ ...card, width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginRight: 10 }}
+            >
+              <Ionicons name="arrow-back" size={20} color={colors.text} />
+            </Pressable>
+          )}
+          <View style={{ flex: 1 }}>
+            <Text accessibilityRole="header" style={{ color: colors.text, fontSize: 30, fontWeight: '800', letterSpacing: -0.5 }}>
+              {showArchived ? 'Archived' : 'Habits'}
+            </Text>
+            <Text style={{ color: colors.textMuted, fontSize: 14, marginTop: 2 }}>
+              {showArchived ? 'Restore a habit to start tracking it again' : 'Small steps, every day'}
             </Text>
           </View>
         </View>
 
-        {/* Toolbar - Web Aligned */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          className="mb-6 flex-row"
-          contentContainerStyle={{ gap: 8, paddingRight: 16 }}
-        >
-          {/* Add Habit Button */}
-          <Pressable
-            onPress={() => setIsModalOpen(true)}
-            className="flex-row items-center space-x-2 px-3 py-2 rounded-lg bg-blue-500/10 active:bg-blue-500/20"
-          >
-            <Ionicons name="add" size={16} color="#3b82f6" />
-            <Text className="text-blue-400 font-medium text-sm">Add Habit</Text>
-          </Pressable>
-
-          {/* Templates Button */}
-          <Pressable
-            onPress={() => {
-              setShowTemplates(true);
-              setIsModalOpen(true);
-            }}
-            className="flex-row items-center space-x-2 px-3 py-2 rounded-lg bg-amber-400/10 active:bg-amber-400/20"
-          >
-            <Ionicons name="grid" size={16} color="#fbbf24" />
-            <Text className="text-amber-400 font-medium text-sm">Templates</Text>
-          </Pressable>
-
-          {/* Challenges Button */}
-          <Pressable
-            className="flex-row items-center space-x-2 px-3 py-2 rounded-lg bg-emerald-400/10 active:bg-emerald-400/20"
-            onPress={() => router.push('/achievements')}
-          >
-            <Ionicons name="trophy" size={16} color="#34d399" />
-            <Text className="text-emerald-400 font-medium text-sm">Challenges</Text>
-          </Pressable>
-
-          {/* Timer Button */}
-          <Pressable
-            className="flex-row items-center space-x-2 px-3 py-2 rounded-lg bg-rose-400/10 active:bg-rose-400/20"
-            onPress={() => router.push('/focus')}
-          >
-            <Ionicons name="timer" size={16} color="#fb7185" />
-            <Text className="text-rose-400 font-medium text-sm">Timer</Text>
-          </Pressable>
-
-          {/* Filter Button */}
-          <Pressable
-            style={{ backgroundColor: colors.backgroundTertiary }}
-            className="flex-row items-center space-x-2 px-3 py-2 rounded-lg active:opacity-80"
-          >
-            <Ionicons name="filter" size={16} color={colors.textMuted} />
-            <Text style={{ color: colors.textMuted }} className="font-medium text-sm">Filter</Text>
-          </Pressable>
-
-          {/* Sort Button */}
-          <Pressable
-            style={{ backgroundColor: colors.backgroundTertiary }}
-            className="flex-row items-center space-x-2 px-3 py-2 rounded-lg active:opacity-80"
-          >
-            <Ionicons name="swap-vertical" size={16} color={colors.textMuted} />
-            <Text style={{ color: colors.textMuted }} className="font-medium text-sm">Newest</Text>
-          </Pressable>
-
-          {/* Archive Toggle */}
-          <Pressable
-            onPress={() => setShowArchived(!showArchived)}
-            style={{ 
-              backgroundColor: showArchived ? colors.primary : colors.backgroundTertiary,
-              borderColor: showArchived ? colors.primary : 'transparent'
-            }}
-            className="flex-row items-center space-x-2 px-3 py-2 rounded-lg border"
-          >
-            <Ionicons name="archive-outline" size={16} color={showArchived ? "#fff" : colors.textMuted} />
-            <Text style={{ color: showArchived ? '#fff' : colors.textMuted }} className="font-medium text-sm">
-              Archived ({archivedHabits?.length || 0})
-            </Text>
-          </Pressable>
-        </ScrollView>
-
-        {/* Stats Summary - New Web Style */}
-        <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="mb-6 flex-row justify-between p-4 rounded-xl border shadow-sm">
-          <View>
-            <Text style={{ color: colors.textMuted }} className="text-xs uppercase tracking-wider mb-1">Total Habits</Text>
-            <Text style={{ color: colors.text }} className="text-2xl font-bold">{habits?.length || 0}</Text>
-          </View>
-          <View>
-            <Text style={{ color: colors.textMuted }} className="text-xs uppercase tracking-wider mb-1">Completed Today</Text>
-            <Text style={{ color: colors.success }} className="text-2xl font-bold">{completedCount}</Text>
-          </View>
-          <View>
-            <Text style={{ color: colors.textMuted }} className="text-xs uppercase tracking-wider mb-1">Completion Rate</Text>
-            <Text style={{ color: colors.primary }} className="text-2xl font-bold">
-              {habits?.length ? Math.round((completedCount / habits.length) * 100) : 0}%
-            </Text>
-          </View>
-        </View>
-
-        {/* Habits List Header */}
-        <View className="mt-6 flex-row items-center justify-between mb-2">
-          <View className="flex-row items-center">
-            {showArchived && (
-              <Pressable
-                onPress={() => setShowArchived(false)}
-                className="mr-3 p-2 rounded-full bg-zinc-800 active:bg-zinc-700"
-              >
-                <Ionicons name="arrow-back" size={20} color={colors.text} />
-              </Pressable>
+        {!showArchived && (
+          <>
+            {/* Today's progress */}
+            {activeCount > 0 && (
+              <View style={{ ...card, padding: 18, flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: colors.textMuted, fontSize: 13, fontWeight: '600' }}>Today</Text>
+                  <Text style={{ color: colors.text, fontSize: 22, fontWeight: '800', marginTop: 2 }}>
+                    {completedToday} of {activeCount} done
+                  </Text>
+                  <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 4 }}>
+                    {messages.greetingLine(completedToday, activeCount)}
+                  </Text>
+                </View>
+                <ProgressRing size={72} strokeWidth={8} progress={progress} trackColor={colors.backgroundSecondary}>
+                  <Text style={{ color: colors.text, fontWeight: '800', fontSize: 16 }}>{Math.round(progress * 100)}%</Text>
+                </ProgressRing>
+              </View>
             )}
-            <Text style={{ color: colors.text }} className="text-lg font-bold">
-              {showArchived ? 'Archived Habits' : 'Your Habits'}
+
+            {/* Primary actions */}
+            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+              <GradientButton label="New habit" icon="add" onPress={openNewHabit} style={{ flex: 1 }} />
+              <GradientButton
+                label="Templates"
+                icon="sparkles-outline"
+                variant="ghost"
+                ghostColors={{ bg: colors.card, text: colors.text, border: colors.cardBorder }}
+                onPress={openTemplates}
+              />
+            </View>
+
+            {/* Secondary shortcuts */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 6 }} style={{ marginBottom: 18 }}>
+              <Pressable onPress={() => setShowArchived(true)} accessibilityRole="button" style={chip(false)}>
+                <Ionicons name="archive-outline" size={15} color={colors.textMuted} />
+                <Text style={{ color: colors.textSecondary, fontWeight: '600', fontSize: 13, marginLeft: 6 }}>
+                  Archived ({archivedHabits?.length || 0})
+                </Text>
+              </Pressable>
+              <Pressable onPress={() => router.push('/focus')} accessibilityRole="button" style={chip(false)}>
+                <Ionicons name="timer-outline" size={15} color={colors.textMuted} />
+                <Text style={{ color: colors.textSecondary, fontWeight: '600', fontSize: 13, marginLeft: 6 }}>Focus timer</Text>
+              </Pressable>
+              <Pressable onPress={() => router.push('/achievements')} accessibilityRole="button" style={chip(false)}>
+                <Ionicons name="trophy-outline" size={15} color={colors.textMuted} />
+                <Text style={{ color: colors.textSecondary, fontWeight: '600', fontSize: 13, marginLeft: 6 }}>Challenges</Text>
+              </Pressable>
+            </ScrollView>
+          </>
+        )}
+
+        {/* Section header */}
+        {habits && habits.length > 0 && (
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
+            <Text style={{ color: colors.text, fontSize: 18, fontWeight: '800' }}>
+              {showArchived ? 'Archived habits' : 'Your habits'}
+            </Text>
+            <Text style={{ color: colors.textMuted, fontSize: 13 }}>
+              {habits.length} {habits.length === 1 ? 'habit' : 'habits'}
             </Text>
           </View>
-          <Text style={{ color: colors.textMuted }} className="text-sm">
-            {habits?.length || 0} {habits?.length === 1 ? 'habit' : 'habits'}
-          </Text>
-        </View>
+        )}
 
-        {/* Habits Grid (web-like) - Showing last 5 days */}
-        {!showArchived && habits && habits.length > 0 && entries && (
+        {/* Active habits grid */}
+        {!showArchived && habits && habits.length > 0 && (
           <HabitGridMobile
             habits={habits}
-            entries={entries}
+            entries={entries ?? []}
             days={last5Days}
-            onToggle={(habitId, date, completed) => {
-              // Haptic feedback
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
-
-              // Use mutation with optimistic update
-              toggleEntry.mutate(
-                { habitId, entryDate: date, completed },
-                {
-                  onError: (error) => {
-                    console.warn('[HabitGrid] Server sync queued; change saved locally in mobile storage:', error?.message);
-                  },
-                }
-              );
-            }}
+            onToggle={handleGridToggle}
+            onManage={setManageHabit}
             colors={colors}
-            onArchive={(habitId) => {
-              Alert.alert('Archive Habit', 'Are you sure you want to archive this habit?', [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Archive', onPress: () => archiveHabit.mutate(habitId) }
-              ]);
-            }}
-            onDelete={(habitId) => {
-              Alert.alert('Delete Habit', 'Are you sure you want to delete this habit permanently?', [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Delete', style: 'destructive', onPress: () => deleteHabit.mutate(habitId) }
-              ]);
-            }}
           />
         )}
 
-        {/* Habits List */}
-        <View>
-          {showArchived && habits && habits.length > 0 && (
-            habits.map((habit: Habit) => {
-              const todayEntry = getTodayEntry(habit.id);
-              const isCompleted = todayEntry?.completed || false;
+        {/* Archived list */}
+        {showArchived &&
+          habits?.map((habit: Habit) => (
+            <View key={habit.id} style={{ ...card, padding: 16, marginBottom: 10, flexDirection: 'row', alignItems: 'center' }}>
+              <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: habit.color || colors.primary, marginRight: 12 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: colors.text, fontSize: 16, fontWeight: '700' }} numberOfLines={1}>{habit.title}</Text>
+                {habit.category && <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>{habit.category}</Text>}
+              </View>
+              <Pressable
+                onPress={() => restore(habit)}
+                accessibilityRole="button"
+                accessibilityLabel={`Restore ${habit.title}`}
+                style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft, marginRight: 8 }}
+              >
+                <Ionicons name="refresh" size={18} color={colors.primary} />
+              </Pressable>
+              <Pressable
+                onPress={() => setConfirm({ kind: 'delete', habit })}
+                accessibilityRole="button"
+                accessibilityLabel={`Delete ${habit.title}`}
+                style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(239,68,68,0.12)' }}
+              >
+                <Ionicons name="trash-outline" size={18} color={colors.error} />
+              </Pressable>
+            </View>
+          ))}
 
+        {/* Empty states */}
+        {(!habits || habits.length === 0) && !showArchived && (
+          <View style={{ ...card, alignItems: 'center', paddingVertical: 28, paddingHorizontal: 24 }}>
+            <Mascot mood="sleeping" size={150} />
+            <Text style={{ color: colors.text, fontSize: 20, fontWeight: '800', marginTop: 4 }}>No habits yet</Text>
+            <Text style={{ color: colors.textMuted, fontSize: 14, textAlign: 'center', marginTop: 6, marginBottom: 20, lineHeight: 20 }}>
+              Start with one small habit. You can add more anytime.
+            </Text>
+            <GradientButton label="Add a habit" icon="add" onPress={openNewHabit} style={{ alignSelf: 'stretch' }} />
+            <Pressable onPress={openTemplates} accessibilityRole="button" style={{ marginTop: 14, padding: 6 }}>
+              <Text style={{ color: colors.primary, fontWeight: '700' }}>Browse templates</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {(!habits || habits.length === 0) && showArchived && (
+          <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+            <Ionicons name="archive-outline" size={44} color={colors.textMuted} />
+            <Text style={{ color: colors.textMuted, marginTop: 10 }}>No archived habits</Text>
+          </View>
+        )}
+      </ScrollView>
+
+      {/* New habit / templates sheet */}
+      <Sheet
+        visible={isModalOpen}
+        onClose={closeModal}
+        title={showTemplates ? 'Templates' : 'New habit'}
+        subtitle={showTemplates ? 'Tap + to add a habit. Add as many as you like.' : 'What do you want to do every day?'}
+      >
+        {showTemplates ? (
+          <ScrollView style={{ flexGrow: 0 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, marginBottom: 14 }}>
+              {[null, ...getTemplateCategories()].map((cat) => {
+                const active = selectedTemplateCategory === cat;
+                return (
+                  <Pressable key={cat ?? 'all'} onPress={() => setSelectedTemplateCategory(cat)} accessibilityRole="button" style={chip(active)}>
+                    <Text style={{ color: active ? colors.primary : colors.textSecondary, fontWeight: '700', fontSize: 13 }}>{cat ?? 'All'}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+
+            {HABIT_TEMPLATES.filter((t) => !selectedTemplateCategory || t.category === selectedTemplateCategory).map((template) => {
+              const added = activeTitles.has(normalizeTitle(template.title));
               return (
                 <View
-                  key={habit.id}
-                  style={{ backgroundColor: colors.surface, borderColor: isCompleted ? habit.color : colors.border }}
-                  className="rounded-2xl border-2 p-4 mb-3 flex-row items-center"
+                  key={template.id}
+                  style={{ flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 20, backgroundColor: colors.backgroundSecondary, marginBottom: 10 }}
                 >
-                  {/* Checkbox - Improved visibility with gradient on completion */}
-                  {isCompleted ? (
+                  <View style={{ width: 46, height: 46, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: `${template.color}22`, marginRight: 12 }}>
+                    <Text style={{ fontSize: 22 }}>{template.icon}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.text, fontWeight: '700', fontSize: 15 }}>{template.title}</Text>
+                    <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }} numberOfLines={1}>
+                      {template.goalType !== 'binary' && template.goalTarget ? `${template.goalTarget} ${template.unit ?? ''} · ` : ''}
+                      {template.category}
+                    </Text>
+                  </View>
+                  {added ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, height: 34, borderRadius: 999, backgroundColor: 'rgba(34,197,94,0.14)' }}>
+                      <Ionicons name="checkmark" size={16} color={colors.success} />
+                      <Text style={{ color: colors.success, fontWeight: '700', fontSize: 12, marginLeft: 4 }}>Added</Text>
+                    </View>
+                  ) : (
                     <Pressable
-                      onPress={() => {
-                        if (!showArchived) {
-                          handleToggleHabit(habit.id);
-                        }
-                      }}
+                      onPress={() => handleAddTemplate(template)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Add ${template.title}`}
+                      hitSlop={6}
+                      style={({ pressed }) => ({
+                        width: 38,
+                        height: 38,
+                        borderRadius: 19,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: colors.primary,
+                        transform: [{ scale: pressed ? 0.92 : 1 }],
+                      })}
                     >
-                      <LinearGradient
-                        colors={[habit.color || colors.primary, habit.color ? `${habit.color}dd` : colors.primary]}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        className="w-12 h-12 rounded-xl items-center justify-center mr-4"
-                      >
-                        <Ionicons name="checkmark" size={28} color="#ffffff" />
-                      </LinearGradient>
+                      <Ionicons name="add" size={22} color="#ffffff" />
                     </Pressable>
-                  ) : (
-                    <Pressable
-                      onPress={() => {
-                        if (!showArchived) {
-                          handleToggleHabit(habit.id);
-                        }
-                      }}
-                      className="w-12 h-12 rounded-xl items-center justify-center mr-4"
-                      style={{
-                        borderWidth: 3,
-                        borderColor: habit.color || colors.primary,
-                        backgroundColor: 'transparent'
-                      }}
-                    />
-                  )}
-
-                  {/* Habit Info - Pressable for long press actions */}
-                  <Pressable
-                    className="flex-1"
-                    onPress={() => {
-                      if (!showArchived) {
-                        handleToggleHabit(habit.id);
-                      }
-                    }}
-                    onLongPress={() => {
-                      if (showArchived) {
-                        Alert.alert(
-                          habit.title,
-                          'What would you like to do?',
-                          [
-                            { text: 'Cancel', style: 'cancel' },
-                            { text: 'Restore', onPress: () => handleRestoreHabit(habit) },
-                            { text: 'Delete', style: 'destructive', onPress: () => handleDeleteHabit(habit) },
-                          ]
-                        );
-                      } else {
-                        Alert.alert(
-                          habit.title,
-                          'What would you like to do?',
-                          [
-                            { text: 'Cancel', style: 'cancel' },
-                            { text: 'Archive', onPress: () => handleArchiveHabit(habit) },
-                          ]
-                        );
-                      }
-                    }}
-                  >
-                    <View className="flex-row items-center justify-between mb-1">
-                      <Text
-                        style={{
-                          color: isCompleted ? colors.textMuted : colors.text,
-                          textDecorationLine: isCompleted ? 'line-through' : 'none'
-                        }}
-                        className="text-lg font-semibold flex-1"
-                      >
-                        {habit.title}
-                      </Text>
-                      {isCompleted && (
-                        <View style={{ backgroundColor: `${habit.color || colors.primary}20` }} className="px-3 py-1 rounded-full ml-2">
-                          <Text style={{ color: habit.color || colors.primary }} className="text-xs font-bold">Done</Text>
-                        </View>
-                      )}
-                    </View>
-                    {habit.category && (
-                      <Text style={{ color: colors.textMuted }} className="text-xs mt-0.5">{habit.category}</Text>
-                    )}
-                  </Pressable>
-
-                  {/* Right side actions or status */}
-                  {showArchived ? (
-                    <View className="flex-row items-center space-x-3 ml-2">
-                      <Pressable 
-                        onPress={() => handleRestoreHabit(habit)}
-                        className="p-2 rounded-full bg-blue-500/10 active:bg-blue-500/20"
-                        style={{ marginRight: 8 }}
-                      >
-                        <Ionicons name="refresh" size={20} color="#3b82f6" />
-                      </Pressable>
-                      <Pressable 
-                        onPress={() => handleDeleteHabit(habit)}
-                        className="p-2 rounded-full bg-red-500/10 active:bg-red-500/20"
-                      >
-                        <Ionicons name="trash" size={20} color="#ef4444" />
-                      </Pressable>
-                    </View>
-                  ) : (
-                    <View className="flex-row items-center">
-                      {isCompleted && (
-                        <View className="mr-2 px-2 py-1 rounded-full" style={{ backgroundColor: colors.success + '20' }}>
-                          <Text style={{ color: colors.success }} className="text-xs font-medium">Done</Text>
-                        </View>
-                      )}
-                      <View
-                        className="w-2 h-8 rounded-full"
-                        style={{ backgroundColor: habit.color || colors.primary }}
-                      />
-                    </View>
                   )}
                 </View>
               );
-            })
-          )}
-          
-          {showArchived && (
-            <View className="items-center mt-2 pb-8">
-              <Pressable
-                onPress={() => setShowArchived(false)}
-                style={{ backgroundColor: colors.backgroundTertiary, borderColor: colors.border }}
-                className="flex-row items-center justify-center px-6 py-4 rounded-xl w-full border active:opacity-80 shadow-sm"
-              >
-                <Ionicons name="arrow-back" size={20} color={colors.text} />
-                <Text style={{ color: colors.text }} className="font-bold ml-2 text-base">Return to Main Habits</Text>
-              </Pressable>
-            </View>
-          )}
-          
-          {(!habits || habits.length === 0) && !showArchived && (
-            <View className="items-center py-12">
-              <Ionicons name="add-circle-outline" size={48} color={colors.textMuted} />
-              <Text style={{ color: colors.textMuted }} className="mt-3 text-center">
-                No habits yet
-              </Text>
-              <Pressable
-                style={{ backgroundColor: colors.primary }}
-                className="mt-4 px-6 py-3 rounded-xl shadow-sm"
-                onPress={() => setIsModalOpen(true)}
-              >
-                <Text className="text-white font-bold">Add Your First Habit</Text>
-              </Pressable>
-            </View>
-          )}
+            })}
 
-          {(!habits || habits.length === 0) && showArchived && (
-            <View className="items-center py-8">
-              <Ionicons name="archive-outline" size={48} color={colors.textMuted} />
-              <Text style={{ color: colors.textMuted }} className="mt-3 text-center">
-                No archived habits
-              </Text>
-            </View>
-          )}
-        </View>
+            <Pressable onPress={() => setShowTemplates(false)} accessibilityRole="button" style={{ alignItems: 'center', paddingVertical: 14 }}>
+              <Text style={{ color: colors.primary, fontWeight: '700' }}>Create your own habit instead</Text>
+            </Pressable>
+          </ScrollView>
+        ) : (
+          <ScrollView style={{ flexGrow: 0 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <FieldLabel text="Name" colors={colors} />
+            <TextInput
+              style={inputStyle(colors)}
+              placeholder="e.g. Morning walk"
+              placeholderTextColor={colors.textMuted}
+              value={newHabitTitle}
+              onChangeText={setNewHabitTitle}
+              accessibilityLabel="Habit name"
+              returnKeyType="done"
+            />
 
-        {/* Bottom padding */}
-        <View className="h-8" />
-      </ScrollView>
+            <FieldLabel text="Description (optional)" colors={colors} />
+            <TextInput
+              style={[inputStyle(colors), { minHeight: 70, textAlignVertical: 'top' }]}
+              placeholder="Why does this matter to you?"
+              placeholderTextColor={colors.textMuted}
+              value={newHabitDescription}
+              onChangeText={setNewHabitDescription}
+              accessibilityLabel="Habit description"
+              multiline
+            />
 
-      {/* Add Habit Modal */}
-      <Modal
-        visible={isModalOpen}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setIsModalOpen(false)}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          className="flex-1 justify-end bg-black/50"
-        >
-          <View style={{ backgroundColor: colors.background, borderTopColor: colors.border }} className="rounded-t-3xl p-6 border-t max-h-[90%]">
-            {/* Modal Header */}
-            <View className="flex-row items-center justify-between mb-4">
-              <Text style={{ color: colors.text }} className="text-xl font-bold">
-                {showTemplates ? 'Choose Template' : 'New Habit'}
-              </Text>
-              <Pressable onPress={() => {
-                setShowTemplates(false);
-                setIsModalOpen(false);
-              }}>
-                <Ionicons name="close" size={24} color={colors.textMuted} />
-              </Pressable>
-            </View>
-
-            {showTemplates ? (
-              /* Template Picker */
-              <ScrollView showsVerticalScrollIndicator={false} className="max-h-[500px]">
-                {/* Template Categories */}
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-4">
+            <FieldLabel text="Goal" colors={colors} />
+            <View style={{ flexDirection: 'row', backgroundColor: colors.backgroundSecondary, borderRadius: 999, padding: 4, marginBottom: 16 }}>
+              {(['binary', 'duration', 'quantity'] as const).map((type) => {
+                const active = goalType === type;
+                return (
                   <Pressable
-                    onPress={() => setSelectedTemplateCategory(null)}
-                    style={{ backgroundColor: !selectedTemplateCategory ? colors.text : colors.backgroundSecondary }}
-                    className="px-4 py-2 rounded-xl mr-2"
+                    key={type}
+                    onPress={() => setGoalType(type)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    style={{ flex: 1, height: 38, borderRadius: 999, alignItems: 'center', justifyContent: 'center', backgroundColor: active ? colors.card : 'transparent' }}
                   >
-                    <Text style={{ color: !selectedTemplateCategory ? colors.background : colors.textMuted }} className="font-medium">All</Text>
+                    <Text style={{ color: active ? colors.text : colors.textMuted, fontWeight: '700', fontSize: 13 }}>
+                      {type === 'binary' ? 'Yes / No' : type === 'duration' ? 'Duration' : 'Count'}
+                    </Text>
                   </Pressable>
-                  {getTemplateCategories().map((cat) => (
-                    <Pressable
-                      key={cat}
-                      onPress={() => setSelectedTemplateCategory(cat)}
-                      style={{ backgroundColor: selectedTemplateCategory === cat ? colors.text : colors.backgroundSecondary }}
-                      className="px-4 py-2 rounded-xl mr-2"
-                    >
-                      <Text style={{ color: selectedTemplateCategory === cat ? colors.background : colors.textMuted }} className="font-medium">{cat}</Text>
-                    </Pressable>
-                  ))}
-                </ScrollView>
+                );
+              })}
+            </View>
 
-                {/* Template List with Save buttons */}
-                {HABIT_TEMPLATES
-                  .filter(t => !selectedTemplateCategory || t.category === selectedTemplateCategory)
-                  .map((template) => (
-                    <View
-                      key={template.id}
-                      style={{ backgroundColor: colors.backgroundSecondary }}
-                      className="rounded-xl p-4 mb-3 flex-row items-center"
-                    >
-                      <Text className="text-2xl mr-3">{template.icon}</Text>
-                      <View className="flex-1">
-                        <Text style={{ color: colors.text }} className="font-medium">{template.title}</Text>
-                        <Text style={{ color: colors.textSecondary }} className="text-xs mt-0.5">{template.description}</Text>
-                        <View className="flex-row items-center mt-1">
-                          <View style={{ backgroundColor: colors.backgroundTertiary }} className="px-2 py-0.5 rounded-full mr-2">
-                            <Text style={{ color: colors.textMuted }} className="text-xs">{template.category}</Text>
-                          </View>
-                          {template.goalType !== 'binary' && (
-                            <Text style={{ color: colors.textSecondary }} className="text-xs">
-                              {template.goalTarget} {template.unit}
-                            </Text>
-                          )}
-                        </View>
-                      </View>
-                      <Pressable
-                        onPress={() => handleSelectTemplate(template)}
-                        disabled={createHabit.isPending}
-                        className="bg-amber-400 px-4 py-2 rounded-lg ml-2"
-                      >
-                        {createHabit.isPending ? (
-                          <ActivityIndicator color="#18181b" size="small" />
-                        ) : (
-                          <Text className="text-zinc-900 font-bold text-sm">Save</Text>
-                        )}
-                      </Pressable>
-                    </View>
-                  ))}
-
-                <Pressable
-                  onPress={() => setShowTemplates(false)}
-                  className="bg-zinc-800 rounded-xl py-3 items-center mt-2 mb-4"
-                >
-                  <Text className="text-zinc-400">Or create custom habit</Text>
-                </Pressable>
-              </ScrollView>
-            ) : (
-              /* Custom Habit Form */
-              <ScrollView showsVerticalScrollIndicator={false}>
-                {/* Quick Action Buttons */}
-                <View className="flex-row mb-4">
-                  <Pressable
-                    onPress={() => setShowTemplates(true)}
-                    style={{ backgroundColor: colors.backgroundSecondary, borderColor: colors.border }}
-                    className="flex-1 border rounded-xl px-4 py-3 mr-2 flex-row items-center justify-center"
-                  >
-                    <Ionicons name="flash" size={18} color="#f59e0b" />
-                    <Text style={{ color: colors.text }} className="ml-2 text-sm">Templates</Text>
-                  </Pressable>
+            {goalType !== 'binary' && (
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <FieldLabel text="Target" colors={colors} />
+                  <TextInput
+                    style={inputStyle(colors)}
+                    placeholder="e.g. 30"
+                    placeholderTextColor={colors.textMuted}
+                    value={goalTarget}
+                    onChangeText={setGoalTarget}
+                    keyboardType="numeric"
+                    accessibilityLabel="Target"
+                  />
                 </View>
-
-                {/* Habit Title Input */}
-                <Text style={{ color: colors.textMuted }} className="text-sm font-medium mb-2">Habit Name *</Text>
-                <TextInput
-                  style={{ backgroundColor: colors.backgroundSecondary, borderColor: colors.border, color: colors.text }}
-                  className="border rounded-xl px-4 py-3 text-base mb-4"
-                  placeholder="e.g., Morning Exercise"
-                  placeholderTextColor={colors.textMuted}
-                  value={newHabitTitle}
-                  onChangeText={setNewHabitTitle}
-                />
-
-                {/* Description Input */}
-                <Text style={{ color: colors.textMuted }} className="text-sm font-medium mb-2">Description (optional)</Text>
-                <TextInput
-                  style={{ backgroundColor: colors.backgroundSecondary, borderColor: colors.border, color: colors.text }}
-                  className="border rounded-xl px-4 py-3 text-base mb-4"
-                  placeholder="Add details about this habit"
-                  placeholderTextColor={colors.textMuted}
-                  value={newHabitDescription}
-                  onChangeText={setNewHabitDescription}
-                  multiline
-                />
-
-                {/* Goal Type */}
-                <Text style={{ color: colors.textMuted }} className="text-sm font-medium mb-2">Goal Type</Text>
-                <View className="flex-row mb-4">
-                  {(['binary', 'duration', 'quantity'] as const).map((type) => (
-                    <Pressable
-                      key={type}
-                      onPress={() => setGoalType(type)}
-                      style={{ backgroundColor: goalType === type ? colors.text : colors.backgroundSecondary }}
-                      className="flex-1 py-2.5 rounded-xl mr-2"
-                    >
-                      <Text style={{ color: goalType === type ? colors.background : colors.textMuted }} className="text-center text-sm font-medium">
-                        {type === 'binary' ? 'Yes/No' : type === 'duration' ? 'Duration' : 'Count'}
-                      </Text>
-                    </Pressable>
-                  ))}
+                <View style={{ flex: 1 }}>
+                  <FieldLabel text="Unit" colors={colors} />
+                  <TextInput
+                    style={inputStyle(colors)}
+                    placeholder={goalType === 'duration' ? 'minutes' : 'times'}
+                    placeholderTextColor={colors.textMuted}
+                    value={goalUnit}
+                    onChangeText={setGoalUnit}
+                    accessibilityLabel="Unit"
+                  />
                 </View>
-
-                {/* Goal Target (for duration/quantity) */}
-                {goalType !== 'binary' && (
-                  <View className="flex-row mb-4">
-                    <View className="flex-1 mr-2">
-                      <Text style={{ color: colors.textMuted }} className="text-sm font-medium mb-2">Target</Text>
-                      <TextInput
-                        style={{ backgroundColor: colors.backgroundSecondary, borderColor: colors.border, color: colors.text }}
-                        className="border rounded-xl px-4 py-3 text-base"
-                        placeholder="e.g., 30"
-                        placeholderTextColor={colors.textMuted}
-                        value={goalTarget}
-                        onChangeText={setGoalTarget}
-                        keyboardType="numeric"
-                      />
-                    </View>
-                    <View className="flex-1">
-                      <Text style={{ color: colors.textMuted }} className="text-sm font-medium mb-2">Unit</Text>
-                      <TextInput
-                        style={{ backgroundColor: colors.backgroundSecondary, borderColor: colors.border, color: colors.text }}
-                        className="border rounded-xl px-4 py-3 text-base"
-                        placeholder={goalType === 'duration' ? 'minutes' : 'times'}
-                        placeholderTextColor={colors.textMuted}
-                        value={goalUnit}
-                        onChangeText={setGoalUnit}
-                      />
-                    </View>
-                  </View>
-                )}
-
-                {/* Category Picker */}
-                <Text style={{ color: colors.textMuted }} className="text-sm font-medium mb-2">Category</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-4">
-                  {categories.map((cat) => (
-                    <Pressable
-                      key={cat}
-                      onPress={() => setSelectedCategory(selectedCategory === cat ? '' : cat)}
-                      style={{ backgroundColor: selectedCategory === cat ? colors.text : colors.backgroundSecondary }}
-                      className="px-4 py-2 rounded-xl mr-2"
-                    >
-                      <Text style={{ color: selectedCategory === cat ? colors.background : colors.textMuted }} className="font-medium">
-                        {cat}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </ScrollView>
-
-                {/* Color Picker */}
-                <Text style={{ color: colors.textMuted }} className="text-sm font-medium mb-2">Color</Text>
-                <View className="flex-row flex-wrap mb-6">
-                  {habitColors.map((color) => (
-                    <Pressable
-                      key={color}
-                      onPress={() => setSelectedColor(color)}
-                      className="w-10 h-10 rounded-xl mr-2 mb-2 items-center justify-center"
-                      style={{ backgroundColor: color }}
-                    >
-                      {selectedColor === color && (
-                        <Ionicons name="checkmark" size={20} color="#ffffff" />
-                      )}
-                    </Pressable>
-                  ))}
-                </View>
-
-                {/* Add Button */}
-                <Pressable
-                  onPress={handleAddHabit}
-                  disabled={createHabit.isPending}
-                  style={{ backgroundColor: createHabit.isPending ? colors.backgroundSecondary : colors.text }}
-                  className="rounded-xl py-4 items-center mb-4"
-                >
-                  {createHabit.isPending ? (
-                    <ActivityIndicator color={colors.text} />
-                  ) : (
-                    <Text style={{ color: colors.background }} className="font-bold text-base">Add Habit</Text>
-                  )}
-                </Pressable>
-              </ScrollView>
+              </View>
             )}
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+
+            <FieldLabel text="Category" colors={colors} />
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }} style={{ marginBottom: 16 }}>
+              {categories.map((cat) => {
+                const active = selectedCategory === cat;
+                return (
+                  <Pressable key={cat} onPress={() => setSelectedCategory(active ? '' : cat)} accessibilityRole="button" accessibilityState={{ selected: active }} style={chip(active)}>
+                    <Text style={{ color: active ? colors.primary : colors.textSecondary, fontWeight: '700', fontSize: 13 }}>{cat}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+
+            <FieldLabel text="Color" colors={colors} />
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 22 }}>
+              {habitColors.map((color) => (
+                <Pressable
+                  key={color}
+                  onPress={() => setSelectedColor(color)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Color ${color}`}
+                  accessibilityState={{ selected: selectedColor === color }}
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: color,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderWidth: selectedColor === color ? 3 : 0,
+                    borderColor: colors.card,
+                  }}
+                >
+                  {selectedColor === color && <Ionicons name="checkmark" size={18} color="#ffffff" />}
+                </Pressable>
+              ))}
+            </View>
+
+            <GradientButton label="Add habit" icon="checkmark" size="lg" onPress={handleAddHabit} disabled={!newHabitTitle.trim()} />
+            <Pressable onPress={() => setShowTemplates(true)} accessibilityRole="button" style={{ alignItems: 'center', paddingVertical: 14 }}>
+              <Text style={{ color: colors.primary, fontWeight: '700' }}>Or pick a template</Text>
+            </Pressable>
+          </ScrollView>
+        )}
+      </Sheet>
+
+      {/* Manage a habit */}
+      <ActionSheet
+        visible={!!manageHabit}
+        onClose={() => setManageHabit(null)}
+        title={manageHabit?.title ?? ''}
+        subtitle="Manage this habit"
+        actions={
+          manageHabit
+            ? [
+                { label: 'Archive', icon: 'archive-outline', onPress: () => setConfirm({ kind: 'archive', habit: manageHabit }) },
+                { label: 'Delete', icon: 'trash-outline', destructive: true, onPress: () => setConfirm({ kind: 'delete', habit: manageHabit }) },
+              ]
+            : []
+        }
+      />
+
+      <ConfirmSheet
+        visible={!!confirm}
+        onClose={() => setConfirm(null)}
+        title={confirm?.kind === 'delete' ? `Delete “${confirm?.habit.title}”?` : `Archive “${confirm?.habit.title}”?`}
+        message={
+          confirm?.kind === 'delete'
+            ? 'This permanently removes the habit and its history. This can’t be undone.'
+            : 'It moves to Archived. Your history is kept and you can restore it anytime.'
+        }
+        confirmLabel={confirm?.kind === 'delete' ? 'Delete' : 'Archive'}
+        destructive={confirm?.kind === 'delete'}
+        onConfirm={runConfirm}
+      />
     </SafeAreaView>
   );
+}
+
+function FieldLabel({ text, colors }: { text: string; colors: any }) {
+  return <Text style={{ color: colors.textMuted, fontSize: 13, fontWeight: '700', marginBottom: 8 }}>{text}</Text>;
+}
+
+function inputStyle(colors: any) {
+  return {
+    backgroundColor: colors.backgroundSecondary,
+    color: colors.text,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    marginBottom: 16,
+  } as const;
 }
