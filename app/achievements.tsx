@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ALL_ACHIEVEMENTS } from '@/lib/constants';
 import { useUserChallenges, useJoinChallenge } from '@/lib/hooks';
+import { toast } from '@/lib/celebrate';
 
 function AchievementCard({ 
   achievement, 
@@ -185,12 +186,24 @@ export default function AchievementsScreen() {
 
   const handleJoin = async (id: string) => {
     setIsJoiningId(id);
+    const title = ALL_ACHIEVEMENTS.find((a: any) => a.id === id)?.title ?? 'this challenge';
     try {
       await joinChallenge.mutateAsync(id);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      toast(`Joined “${title}”. Good luck!`);
       refetchUserChallenges();
-    } catch (error) {
-      console.error('Failed to join achievement:', error);
+    } catch (error: any) {
+      const status = error?.response?.status;
+      if (status === 409) {
+        // Already joined on the server: just refresh the list
+        refetchUserChallenges();
+        toast({ tone: 'info', message: `You’ve already joined “${title}”.` });
+      } else if (!error?.response) {
+        toast({ tone: 'error', message: 'You’re offline. Connect to the internet to join a challenge.' });
+      } else {
+        console.warn('[Challenges] Join failed:', status, error?.response?.data);
+        toast({ tone: 'error', message: `Couldn’t join “${title}” right now. Please try again later.` });
+      }
     } finally {
       setIsJoiningId(null);
     }
