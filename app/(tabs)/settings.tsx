@@ -303,8 +303,8 @@ export default function SettingsScreen() {
             <View style={{ backgroundColor: isDark ? 'rgba(39, 39, 42, 0.5)' : '#e4e4e7' }} className="h-px mx-4" />
             <SettingRow
               icon="alarm-outline"
-              title="Daily Reminder"
-              subtitle="Get reminded to track habits"
+              title="Evening Nudge"
+              subtitle="8:30 PM, only if habits are left"
               value={dailyReminder}
               onToggle={handleToggleDailyReminder}
               isDark={isDark}

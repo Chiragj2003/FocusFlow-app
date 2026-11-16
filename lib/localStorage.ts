@@ -14,6 +14,7 @@ const STORAGE_KEYS = {
   ID_MAP: '@focusflow_temp_id_map',
   OWNER: '@focusflow_local_owner',
   RECENT_CREATES: '@focusflow_recent_creates',
+  HABIT_REMINDERS: '@focusflow_habit_reminders',
 };
 
 /** How long a freshly synced habit is kept even if the server list doesn't show it yet. */
@@ -361,6 +362,28 @@ class LocalStorageManager {
   }
 
   // ==========================================
+  // PER-HABIT REMINDER TIMES (habitId -> "HH:MM"), device only
+  // ==========================================
+
+  async getHabitReminders(): Promise<Record<string, string>> {
+    try {
+      const data = await AsyncStorage.getItem(STORAGE_KEYS.HABIT_REMINDERS);
+      return data ? JSON.parse(data) : {};
+    } catch {
+      return {};
+    }
+  }
+
+  setHabitReminder(habitId: string, time: string | null): Promise<void> {
+    return this.withLock(async () => {
+      const map = await this.getHabitReminders();
+      if (time) map[habitId] = time;
+      else delete map[habitId];
+      await AsyncStorage.setItem(STORAGE_KEYS.HABIT_REMINDERS, JSON.stringify(map));
+    });
+  }
+
+  // ==========================================
   // RECENTLY CREATED HABITS (server id -> synced at)
   // ==========================================
 
@@ -535,6 +558,14 @@ class LocalStorageManager {
             const habits = await this.getLocalHabits();
             await this.saveLocalHabits(habits.map((h) => (h.id === tempId ? serverHabit : h)));
             await this.addRecentCreate(serverHabit.id);
+
+            // Carry a reminder set on the temp habit over to the real id
+            const reminders = await this.getHabitReminders();
+            if (reminders[tempId]) {
+              reminders[serverHabit.id] = reminders[tempId];
+              delete reminders[tempId];
+              await AsyncStorage.setItem(STORAGE_KEYS.HABIT_REMINDERS, JSON.stringify(reminders));
+            }
 
             const entries = await this.getLocalEntries();
             await this.saveLocalEntries(

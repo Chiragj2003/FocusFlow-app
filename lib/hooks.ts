@@ -425,6 +425,8 @@ export function useToggleEntry() {
           await maybeCelebrateAllDone(vars.entryDate);
         })().catch((e) => console.warn('[useToggleEntry] Celebration check failed:', e));
       }
+      // Skip today's reminders for done habits / drop the evening nudge when all done
+      notificationsManager.updateScheduledReminders('entry toggled', 1500);
     },
   });
 }

@@ -1,8 +1,32 @@
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import { localStorage } from './localStorage';
 
 const REMINDER_CHANNEL_ID = 'habit-reminders';
+
+const HABIT_LINES = [
+  'Small step, big fire. You’ve got this.',
+  'Two minutes is enough to keep it going.',
+  'Sparky is ready when you are.',
+  'Show up today. Future you will thank you.',
+];
+
+const EVENING_LINES = [
+  'Check in before bed and keep your flame alive.',
+  'Day’s almost done. Did you show up for your habits?',
+  'One quick check-in keeps the streak going.',
+];
+
+const dateKey = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+/** Stable pick so the same reminder doesn't change text on every reschedule. */
+const pickLine = (lines: string[], seed: string) => {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0;
+  return lines[Math.abs(h) % lines.length];
+};
 const PROMPTED_KEY = '@focusflow_notifications_prompted';
 
 // Set up the default notification handler
@@ -16,6 +40,7 @@ Notifications.setNotificationHandler({
 });
 
 let debounceTimeout: ReturnType<typeof setTimeout> | null = null;
+let scheduleChain: Promise<void> = Promise.resolve();
 
 async function ensureAndroidChannel(): Promise<void> {
   if (Platform.OS !== 'android') return;
@@ -94,8 +119,13 @@ export const notificationsManager = {
     }
   },
 
-  // Schedule reminders for the next 7 days (at 6 AM, 11 AM, 4 PM, 9 PM)
-  async scheduleOfflineReminders(askPermission = false): Promise<void> {
+  /**
+   * Smart reminders, rebuilt from on-device data each time something changes:
+   * - per-habit reminders at the time the user picked (skipped today if already done)
+   * - one evening nudge, only if something is still unchecked today
+   * Scheduled a few days ahead so they still fire if the app isn't opened.
+   */
+  async scheduleOfflineReminders(askPermission = false, includeEvening = true): Promise<void> {
     if (Platform.OS === 'web') return;
 
     try {
@@ -104,56 +134,66 @@ export const notificationsManager = {
       if (!hasPermission) return;
 
       await ensureAndroidChannel();
-
-      // Cancel existing reminders first to avoid duplicates
       await this.cancelAllReminders();
 
-      const reminderTimes = [
-        { hour: 6, title: "Morning Habit Check 🌅", body: "Rise and shine! Your habits are waiting. Don't start the day with unfinished business - check off your morning goals now!" },
-        { hour: 11, title: "Mid-day Consistency Check ⚡", body: "Focus check! You still have incomplete habits for today. Don't let your streak slip away—take action now!" },
-        { hour: 16, title: "Afternoon Habit Sync 🧘", body: "Consistency is power! Keep your daily goals on track and log your progress now!" },
-        { hour: 21, title: "Evening Reflection 🌙", body: "Day's ending soon! Guard your streaks. Make sure you don't sleep on incomplete habits. Log your progress now!" },
-      ];
+      const habits = (await localStorage.getLocalHabits()).filter((h) => h.active !== false);
+      if (habits.length === 0) return;
 
+      const reminders = await localStorage.getHabitReminders();
+      const entries = await localStorage.getLocalEntries();
+      const today = dateKey(new Date());
+      const doneToday = new Set(
+        entries.filter((e) => e.completed && e.entryDate.split('T')[0] === today).map((e) => e.habitId)
+      );
+      const leftToday = habits.filter((h) => !doneToday.has(h.id)).length;
+
+      const withTime = habits.filter((h) => /^\d{2}:\d{2}$/.test(reminders[h.id] ?? ''));
+      // iOS keeps at most 64 pending notifications: plan as many days as fit
+      const perDay = withTime.length + (includeEvening ? 1 : 0);
+      const days = Math.max(1, Math.min(7, Math.floor(60 / Math.max(1, perDay))));
       const now = new Date();
 
-      for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
-        const checkDate = new Date();
-        checkDate.setDate(now.getDate() + dayOffset);
+      const schedule = (date: Date, title: string, body: string) =>
+        Notifications.scheduleNotificationAsync({
+          content: { title, body, sound: true },
+          trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date, channelId: REMINDER_CHANNEL_ID },
+        });
 
-        for (const time of reminderTimes) {
-          const triggerDate = new Date(checkDate);
-          triggerDate.setHours(time.hour, 0, 0, 0);
+      for (let d = 0; d < days; d++) {
+        const day = new Date();
+        day.setDate(now.getDate() + d);
 
-          // If trigger time is in the past, skip it
-          if (triggerDate <= now) {
-            continue;
-          }
+        for (const habit of withTime) {
+          if (d === 0 && doneToday.has(habit.id)) continue;
+          const [hh, mm] = reminders[habit.id].split(':').map(Number);
+          const at = new Date(day);
+          at.setHours(hh, mm, 0, 0);
+          if (at <= now) continue;
+          await schedule(at, `Time for ${habit.title} 🔥`, pickLine(HABIT_LINES, habit.id + d));
+        }
 
-          await Notifications.scheduleNotificationAsync({
-            content: {
-              title: time.title,
-              body: time.body,
-              sound: true,
-            },
-            trigger: {
-              type: Notifications.SchedulableTriggerInputTypes.DATE,
-              date: triggerDate,
-              channelId: REMINDER_CHANNEL_ID,
-            },
-          });
+        if (includeEvening) {
+          if (d === 0 && leftToday === 0) continue; // all done today: no nudge
+          const at = new Date(day);
+          at.setHours(20, 30, 0, 0);
+          if (at <= now) continue;
+          const body =
+            d === 0
+              ? `${leftToday} ${leftToday === 1 ? 'habit is' : 'habits are'} still waiting. A few minutes keeps your flame alive.`
+              : pickLine(EVENING_LINES, String(d));
+          await schedule(at, 'Your streak is waiting 🔥', body);
         }
       }
-      console.log('[Notifications] Successfully scheduled all reminders for the next 7 days.');
+      console.log(`[Notifications] Scheduled smart reminders for ${days} day(s).`);
     } catch (error) {
       console.error('[Notifications] Error scheduling reminders:', error);
     }
   },
 
   // Initialize notifications state
-  async initializeNotifications(isEnabled: boolean, askPermission = false): Promise<void> {
+  async initializeNotifications(isEnabled: boolean, askPermission = false, includeEvening = true): Promise<void> {
     if (isEnabled) {
-      await this.scheduleOfflineReminders(askPermission);
+      await this.scheduleOfflineReminders(askPermission, includeEvening);
     } else {
       await this.cancelAllReminders();
     }
@@ -181,22 +221,23 @@ export const notificationsManager = {
         const notificationsEnabled = notifyVal !== null ? notifyVal === 'true' : true;
         const dailyReminderEnabled = dailyVal !== null ? dailyVal === 'true' : true;
 
-        await this.initializeNotifications(
-          notificationsEnabled && dailyReminderEnabled,
-          options.askPermission ?? false
-        );
+        // "Notifications" is the master switch; "Daily reminder" controls the evening nudge
+        await this.initializeNotifications(notificationsEnabled, options.askPermission ?? false, dailyReminderEnabled);
       } catch (error) {
         console.error('[Notifications] Failed to update scheduled reminders:', error);
       }
     };
 
+    // Run one reschedule at a time so cancel/schedule passes never interleave (no duplicates)
+    const serialized = () => (scheduleChain = scheduleChain.then(execute, execute));
+
     if (debounceMs > 0) {
       if (debounceTimeout) clearTimeout(debounceTimeout);
       debounceTimeout = setTimeout(() => {
-        execute();
+        serialized();
       }, debounceMs);
     } else {
-      await execute();
+      await serialized();
     }
   }
 };

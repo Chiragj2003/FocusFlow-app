@@ -2,8 +2,11 @@ import { HabitGridMobile } from '@/components/HabitGridMobile';
 import { GradientButton } from '@/components/ui/GradientButton';
 import { Mascot } from '@/components/ui/Mascot';
 import { ProgressRing } from '@/components/ui/ProgressRing';
+import { formatReminder, ReminderSheet } from '@/components/ui/ReminderSheet';
 import { ActionSheet, ConfirmSheet, Sheet } from '@/components/ui/Sheet';
 import { toast } from '@/lib/celebrate';
+import { localStorage } from '@/lib/localStorage';
+import { notificationsManager } from '@/lib/notifications';
 import {
   getToday,
   useArchiveHabit,
@@ -22,7 +25,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -46,6 +49,27 @@ export default function HabitsScreen() {
   const [selectedTemplateCategory, setSelectedTemplateCategory] = useState<string | null>(null);
   const [manageHabit, setManageHabit] = useState<Habit | null>(null);
   const [confirm, setConfirm] = useState<{ kind: 'archive' | 'delete'; habit: Habit } | null>(null);
+  const [reminderHabit, setReminderHabit] = useState<Habit | null>(null);
+  const [reminders, setReminders] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    localStorage.getHabitReminders().then(setReminders).catch(() => {});
+  }, []);
+
+  const saveReminder = async (habit: Habit, time: string | null) => {
+    setReminderHabit(null);
+    if (time) {
+      const allowed = await notificationsManager.requestPermissions();
+      if (!allowed) {
+        toast({ tone: 'error', message: 'Notifications are off. Allow them in your phone settings to get reminders.' });
+        return;
+      }
+    }
+    await localStorage.setHabitReminder(habit.id, time);
+    setReminders(await localStorage.getHabitReminders());
+    await notificationsManager.updateScheduledReminders('habit reminder changed');
+    toast(time ? `Reminder set for ${formatReminder(time)} daily.` : `Reminder for “${habit.title}” turned off.`);
+  };
 
   // Form state
   const [newHabitTitle, setNewHabitTitle] = useState('');
@@ -577,15 +601,32 @@ export default function HabitsScreen() {
         visible={!!manageHabit}
         onClose={() => setManageHabit(null)}
         title={manageHabit?.title ?? ''}
-        subtitle="Manage this habit"
+        subtitle={
+          manageHabit && reminders[manageHabit.id]
+            ? `Reminder at ${formatReminder(reminders[manageHabit.id])}`
+            : 'Manage this habit'
+        }
         actions={
           manageHabit
             ? [
+                {
+                  label: reminders[manageHabit.id] ? 'Change reminder' : 'Set a reminder',
+                  icon: 'alarm-outline',
+                  onPress: () => setReminderHabit(manageHabit),
+                },
                 { label: 'Archive', icon: 'archive-outline', onPress: () => setConfirm({ kind: 'archive', habit: manageHabit }) },
                 { label: 'Delete', icon: 'trash-outline', destructive: true, onPress: () => setConfirm({ kind: 'delete', habit: manageHabit }) },
               ]
             : []
         }
+      />
+
+      <ReminderSheet
+        visible={!!reminderHabit}
+        habitTitle={reminderHabit?.title ?? ''}
+        current={reminderHabit ? reminders[reminderHabit.id] : undefined}
+        onClose={() => setReminderHabit(null)}
+        onSave={(time) => reminderHabit && saveReminder(reminderHabit, time)}
       />
 
       <ConfirmSheet
