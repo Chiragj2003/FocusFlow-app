@@ -6,6 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useState } from 'react';
 import {
     ActivityIndicator,
+    Image,
     Pressable,
     RefreshControl,
     ScrollView,
@@ -13,8 +14,11 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ALL_ACHIEVEMENTS } from '@/lib/constants';
+import { ACTIVE_ACHIEVEMENTS, SHOW_CHALLENGES } from '@/lib/constants';
+import { Redirect } from 'expo-router';
 import { useUserChallenges, useJoinChallenge } from '@/lib/hooks';
+import { toast } from '@/lib/celebrate';
+import { CHALLENGE_ART } from '@/lib/artAssets';
 
 function AchievementCard({ 
   achievement, 
@@ -65,14 +69,20 @@ function AchievementCard({
       className="rounded-2xl p-5 mb-4 shadow-sm border"
     >
       <View className="flex-row items-start">
-        <LinearGradient
-          colors={gradientColors as [string, string]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{ width: 56, height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }}
-        >
-          <Ionicons name={getIcon(achievement.type) as any} size={28} color="#fff" />
-        </LinearGradient>
+        <View style={{ width: 56, height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.backgroundSecondary }}>
+          {CHALLENGE_ART[achievement.type] ? (
+            <Image source={CHALLENGE_ART[achievement.type]} style={{ width: 40, height: 40 }} resizeMode="contain" />
+          ) : (
+            <LinearGradient
+              colors={gradientColors as [string, string]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{ width: 56, height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Ionicons name={getIcon(achievement.type) as any} size={28} color="#fff" />
+            </LinearGradient>
+          )}
+        </View>
         
         <View className="flex-1 ml-4">
           <View className="flex-row items-center justify-between mb-1">
@@ -131,7 +141,7 @@ function AchievementCard({
             
             <View className="flex-row items-center justify-between mt-1">
               <View className="flex-row items-center bg-yellow-500/10 px-3 py-1.5 rounded-lg">
-                <Ionicons name="star" size={16} color="#eab308" />
+                <Image source={CHALLENGE_ART.xp} style={{ width: 18, height: 18 }} resizeMode="contain" />
                 <Text className="text-yellow-600 dark:text-yellow-500 text-sm font-bold ml-1.5">{achievement.reward} XP</Text>
               </View>
               
@@ -168,7 +178,13 @@ function AchievementCard({
   );
 }
 
-export default function AchievementsScreen() {
+// Hidden for now: any link to this screen goes back to Home
+export default function AchievementsRoute() {
+  if (!SHOW_CHALLENGES) return <Redirect href="/" />;
+  return <AchievementsScreen />;
+}
+
+function AchievementsScreen() {
   const { isDark, colors } = useTheme();
   const [activeTab, setActiveTab] = useState<'available' | 'joined'>('available');
   const [refreshing, setRefreshing] = useState(false);
@@ -185,12 +201,26 @@ export default function AchievementsScreen() {
 
   const handleJoin = async (id: string) => {
     setIsJoiningId(id);
+    const title = ACTIVE_ACHIEVEMENTS.find((a: any) => a.id === id)?.title ?? 'this challenge';
     try {
       await joinChallenge.mutateAsync(id);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      toast(`Joined “${title}”. Good luck!`);
       refetchUserChallenges();
-    } catch (error) {
-      console.error('Failed to join achievement:', error);
+    } catch (error: any) {
+      const status = error?.response?.status;
+      if (status === 409) {
+        // Already joined on the server: just refresh the list
+        refetchUserChallenges();
+        toast({ tone: 'info', message: `You’ve already joined “${title}”.` });
+      } else if (status === 404) {
+        toast({ tone: 'error', message: `“${title}” isn’t available yet. Pull down to refresh and try again.` });
+      } else if (!error?.response) {
+        toast({ tone: 'error', message: 'You’re offline. Connect to the internet to join a challenge.' });
+      } else {
+        console.warn('[Challenges] Join failed:', status, error?.response?.data);
+        toast({ tone: 'error', message: `Couldn’t join “${title}” right now. Please try again later.` });
+      }
     } finally {
       setIsJoiningId(null);
     }
@@ -198,21 +228,21 @@ export default function AchievementsScreen() {
 
   const isLoading = userChallengesLoading;
 
-  const available = ALL_ACHIEVEMENTS.filter(
+  const available = ACTIVE_ACHIEVEMENTS.filter(
     (c: any) => !userChallenges?.some((uc: any) => uc.challengeId === c.id)
   );
   
   const joined = (userChallenges || []).filter((uc: any) => 
-    ALL_ACHIEVEMENTS.some((c: any) => c.id === uc.challengeId)
+    ACTIVE_ACHIEVEMENTS.some((c: any) => c.id === uc.challengeId)
   );
 
   return (
-    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.background }}>
+    <SafeAreaView edges={['bottom']} style={{ flex: 1, backgroundColor: colors.background }}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       
       {/* Header */}
       <View className="px-6 pt-2 pb-4">
-        <Text style={{ color: colors.text }} className="text-3xl font-black tracking-tight">Achievements</Text>
+        <Text style={{ color: colors.text }} className="text-3xl font-black tracking-tight">Challenges</Text>
         <Text style={{ color: colors.textMuted }} className="mt-1 font-medium">Challenge yourself and earn huge XP rewards.</Text>
       </View>
 
@@ -223,8 +253,8 @@ export default function AchievementsScreen() {
           className="flex-row p-1 rounded-xl border shadow-sm"
         >
           <Pressable 
-            className={`flex-1 py-2.5 items-center rounded-lg ${activeTab === 'available' ? 'shadow-sm' : ''}`}
-            style={{ backgroundColor: activeTab === 'available' ? colors.backgroundSecondary : 'transparent' }}
+            className="flex-1 py-2.5 items-center rounded-lg"
+            style={{ backgroundColor: activeTab === 'available' ? colors.backgroundSecondary : 'transparent', shadowColor: '#000', shadowOpacity: activeTab === 'available' ? 0.08 : 0, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: activeTab === 'available' ? 1 : 0 }}
             onPress={() => {
               setActiveTab('available');
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -238,8 +268,8 @@ export default function AchievementsScreen() {
             </Text>
           </Pressable>
           <Pressable 
-            className={`flex-1 py-2.5 items-center rounded-lg ${activeTab === 'joined' ? 'shadow-sm' : ''}`}
-            style={{ backgroundColor: activeTab === 'joined' ? colors.backgroundSecondary : 'transparent' }}
+            className="flex-1 py-2.5 items-center rounded-lg"
+            style={{ backgroundColor: activeTab === 'joined' ? colors.backgroundSecondary : 'transparent', shadowColor: '#000', shadowOpacity: activeTab === 'joined' ? 0.08 : 0, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: activeTab === 'joined' ? 1 : 0 }}
             onPress={() => {
               setActiveTab('joined');
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -296,7 +326,7 @@ export default function AchievementsScreen() {
               </View>
             ) : (
               joined.map((uc: any) => {
-                const achievement = ALL_ACHIEVEMENTS.find((c: any) => c.id === uc.challengeId);
+                const achievement = ACTIVE_ACHIEVEMENTS.find((c: any) => c.id === uc.challengeId);
                 if (!achievement) return null;
                 return (
                   <AchievementCard

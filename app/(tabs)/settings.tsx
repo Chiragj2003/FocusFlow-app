@@ -21,7 +21,7 @@ export default function SettingsScreen() {
   const queryClient = useQueryClient();
   const { signOut, isSignedIn, getToken } = useAuth();
   const { user } = useUser();
-  const { isDark, mode, setMode, colors } = useTheme();
+  const { isDark, colors } = useTheme();
   const [notifications, setNotifications] = useState(true);
   const [dailyReminder, setDailyReminder] = useState(true);
   const [hapticFeedback, setHapticFeedback] = useState(true);
@@ -303,8 +303,8 @@ export default function SettingsScreen() {
             <View style={{ backgroundColor: isDark ? 'rgba(39, 39, 42, 0.5)' : '#e4e4e7' }} className="h-px mx-4" />
             <SettingRow
               icon="alarm-outline"
-              title="Daily Reminder"
-              subtitle="Get reminded to track habits"
+              title="Evening Nudge"
+              subtitle="8:30 PM, only if habits are left"
               value={dailyReminder}
               onToggle={handleToggleDailyReminder}
               isDark={isDark}
@@ -313,55 +313,10 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* Appearance Section */}
+        {/* Preferences (app is dark-only for now, so no theme picker) */}
         <View className="mt-6">
-          <Text style={{ color: isDark ? '#a1a1aa' : '#71717a' }} className="text-sm font-medium mb-2 px-1">APPEARANCE</Text>
+          <Text style={{ color: isDark ? '#a1a1aa' : '#71717a' }} className="text-sm font-medium mb-2 px-1">PREFERENCES</Text>
           <View style={{ backgroundColor: isDark ? 'rgba(24, 24, 27, 0.5)' : '#f9fafb', borderColor: isDark ? 'rgba(39, 39, 42, 0.5)' : '#e4e4e7' }} className="rounded-2xl border">
-            {/* Theme Selection */}
-            <View className="p-4">
-              <View className="flex-row items-center mb-3">
-                <View style={{ backgroundColor: isDark ? '#27272a' : '#e4e4e7' }} className="w-10 h-10 rounded-xl items-center justify-center">
-                  <Ionicons name="color-palette-outline" size={20} color={isDark ? '#a1a1aa' : '#52525b'} />
-                </View>
-                <View className="flex-1 ml-3">
-                  <Text style={{ color: isDark ? '#ffffff' : '#18181b' }} className="font-medium">Theme</Text>
-                  <Text style={{ color: isDark ? '#71717a' : '#52525b' }} className="text-xs mt-0.5">Choose your preferred theme</Text>
-                </View>
-              </View>
-              <View className="flex-row mt-2">
-                <Pressable
-                  onPress={() => setMode('light')}
-                  style={{
-                    backgroundColor: mode === 'light' ? '#f97316' : (isDark ? '#27272a' : '#e4e4e7'),
-                  }}
-                  className="flex-1 py-3 rounded-xl mr-2 items-center flex-row justify-center"
-                >
-                  <Ionicons name="sunny" size={16} color={mode === 'light' ? '#fff' : (isDark ? '#a1a1aa' : '#52525b')} />
-                  <Text style={{ color: mode === 'light' ? '#fff' : (isDark ? '#a1a1aa' : '#52525b') }} className="ml-2 font-medium">Light</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => setMode('dark')}
-                  style={{
-                    backgroundColor: mode === 'dark' ? '#f97316' : (isDark ? '#27272a' : '#e4e4e7'),
-                  }}
-                  className="flex-1 py-3 rounded-xl mr-2 items-center flex-row justify-center"
-                >
-                  <Ionicons name="moon" size={16} color={mode === 'dark' ? '#fff' : (isDark ? '#a1a1aa' : '#52525b')} />
-                  <Text style={{ color: mode === 'dark' ? '#fff' : (isDark ? '#a1a1aa' : '#52525b') }} className="ml-2 font-medium">Dark</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => setMode('system')}
-                  style={{
-                    backgroundColor: mode === 'system' ? '#f97316' : (isDark ? '#27272a' : '#e4e4e7'),
-                  }}
-                  className="flex-1 py-3 rounded-xl items-center flex-row justify-center"
-                >
-                  <Ionicons name="phone-portrait" size={16} color={mode === 'system' ? '#fff' : (isDark ? '#a1a1aa' : '#52525b')} />
-                  <Text style={{ color: mode === 'system' ? '#fff' : (isDark ? '#a1a1aa' : '#52525b') }} className="ml-2 font-medium">Auto</Text>
-                </Pressable>
-              </View>
-            </View>
-            <View style={{ backgroundColor: isDark ? 'rgba(39, 39, 42, 0.5)' : '#e4e4e7' }} className="h-px mx-4" />
             <SettingRow
               icon="phone-portrait-outline"
               title="Haptic Feedback"

@@ -37,16 +37,15 @@ api.interceptors.request.use(async (config) => {
   const hasGetter = !!getAuthToken;
   let hasToken = false;
 
-  // 2. Attach Authorization header
+  // 2. Attach Authorization header.
+  // Ask Clerk on every request: getToken() keeps its own cache and refreshes the
+  // short-lived (~60s) session token before it expires. Our old 4-minute cache
+  // outlived the token and caused a 401 + retry on most requests.
   if (getAuthToken) {
-    const now = Date.now();
-    if (!cachedToken || now >= tokenExpiry) {
-      try {
-        cachedToken = await getAuthToken();
-        tokenExpiry = now + 4 * 60 * 1000; // Cache for 4 minutes
-      } catch (err) {
-        console.error('[API Request] Failed to retrieve Clerk token:', err);
-      }
+    try {
+      cachedToken = await getAuthToken();
+    } catch (err) {
+      console.warn('[API Request] Failed to retrieve Clerk token:', err);
     }
     if (cachedToken) {
       config.headers.Authorization = `Bearer ${cachedToken}`;

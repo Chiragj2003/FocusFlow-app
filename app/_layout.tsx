@@ -1,4 +1,5 @@
 import { AuthTokenProvider } from '@/components/AuthTokenProvider';
+import { CelebrationHost } from '@/components/ui/CelebrationHost';
 import { tokenCache } from '@/lib/auth';
 import { ThemeProvider, useTheme } from '@/lib/ThemeContext';
 import { ClerkLoaded, ClerkProvider } from '@clerk/clerk-expo';
@@ -9,7 +10,7 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { LogBox } from 'react-native';
+import { LogBox, View } from 'react-native';
 import 'react-native-reanimated';
 import '../global.css';
 
@@ -53,17 +54,34 @@ if (!publishableKey) {
 
 
 function RootLayoutNav() {
-  const { isDark } = useTheme();
+  const { isDark, colors } = useTheme();
 
   return (
-    <>
-      <Stack>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* App background behind every screen, so no white shows through edges or transitions */}
+      <Stack screenOptions={{ contentStyle: { backgroundColor: colors.background } }}>
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false, animation: 'fade' }} />
+        {/* Full pages opened from Home: slim header with just a back button (each page has its own big title) */}
+        {['badges', 'achievements'].map((name) => (
+          <Stack.Screen
+            key={name}
+            name={name}
+            options={{
+              title: '',
+              headerBackTitle: 'Back',
+              headerShadowVisible: false,
+              headerStyle: { backgroundColor: colors.background },
+              headerTintColor: colors.primary,
+            }}
+          />
+        ))}
         <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
       </Stack>
       <StatusBar style={isDark ? 'light' : 'dark'} />
-    </>
+      <CelebrationHost />
+    </View>
   );
 }
 

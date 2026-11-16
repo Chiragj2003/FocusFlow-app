@@ -36,6 +36,15 @@ interface ThemeColors {
   chartPrimary: string;
   chartSecondary: string;
   chartBackground: string;
+
+  // Brand (FocusFlow board): cards, accent and gradient
+  card: string;
+  cardBorder: string;
+  accent: string;
+  primarySoft: string;
+  gradient: [string, string];
+  overlay: string;
+  tabBar: string;
 }
 
 interface ThemeContextType {
@@ -48,10 +57,10 @@ interface ThemeContextType {
 
 const lightColors: ThemeColors = {
   // Backgrounds
-  background: '#ffffff',
-  backgroundSecondary: '#f4f4f5',
+  background: '#f8fafc',
+  backgroundSecondary: '#f1f2f4',
   backgroundTertiary: '#e4e4e7',
-  surface: '#f9fafb',
+  surface: '#ffffff',
   surfaceHover: '#f3f4f6',
   
   // Text
@@ -78,6 +87,15 @@ const lightColors: ThemeColors = {
   chartPrimary: '#18181b',
   chartSecondary: '#71717a',
   chartBackground: '#e4e4e7',
+
+  // Brand
+  card: '#ffffff',
+  cardBorder: '#ececef',
+  accent: '#f59e0b',
+  primarySoft: 'rgba(249, 115, 22, 0.10)',
+  gradient: ['#f97316', '#fbbf24'],
+  overlay: 'rgba(9, 9, 11, 0.45)',
+  tabBar: '#ffffff',
 };
 
 const darkColors: ThemeColors = {
@@ -112,6 +130,15 @@ const darkColors: ThemeColors = {
   chartPrimary: '#ffffff',
   chartSecondary: '#a1a1aa',
   chartBackground: '#27272a',
+
+  // Brand
+  card: '#131316',
+  cardBorder: '#232328',
+  accent: '#fbbf24',
+  primarySoft: 'rgba(249, 115, 22, 0.14)',
+  gradient: ['#f97316', '#fbbf24'],
+  overlay: 'rgba(0, 0, 0, 0.6)',
+  tabBar: '#141417',
 };
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -120,7 +147,8 @@ const THEME_STORAGE_KEY = 'focusflow_theme_mode';
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const systemColorScheme = useColorScheme();
-  const [mode, setModeState] = useState<ThemeMode>('system');
+  // Dark by default; a saved choice (Light / Auto) still wins
+  const [mode, setModeState] = useState<ThemeMode>('dark');
   const [isLoaded, setIsLoaded] = useState(false);
   
   // Load saved theme preference on mount
@@ -151,9 +179,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   };
   
   // Determine if dark mode is active
-  const isDark = mode === 'system' 
-    ? systemColorScheme === 'dark' 
-    : mode === 'dark';
+  // Dark-only for now: every phone gets the dark theme, whatever its system setting
+  // or any choice saved by an older version. (Was: mode / system color scheme.)
+  const isDark = true;
   
   // Toggle between light and dark
   const toggleTheme = () => {
