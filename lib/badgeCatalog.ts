@@ -55,4 +55,18 @@ export function findEarned(earned: { name: string; awardedAt?: string }[] | unde
  *   first_habit: { earned: require('@/assets/badges/first_habit.png'), locked: require('@/assets/badges/first_habit-locked.png') },
  * Badges without art fall back to an icon tile.
  */
-export const BADGE_ART: Partial<Record<string, { earned: ImageSourcePropType; locked?: ImageSourcePropType }>> = {};
+export const BADGE_ART: Partial<Record<string, { earned: ImageSourcePropType; locked?: ImageSourcePropType }>> = {
+  "first_habit": { earned: require('@/assets/art/badges/first_habit.png'), locked: require('@/assets/art/badges/first_habit-locked.png') },
+  "first_completion": { earned: require('@/assets/art/badges/first_completion.png'), locked: require('@/assets/art/badges/first_completion-locked.png') },
+  "all_habits_completed": { earned: require('@/assets/art/badges/all_habits_completed.png'), locked: require('@/assets/art/badges/all_habits_completed-locked.png') },
+  "3_day_streak": { earned: require('@/assets/art/badges/3_day_streak.png'), locked: require('@/assets/art/badges/3_day_streak-locked.png') },
+  "week_warrior": { earned: require('@/assets/art/badges/week_warrior.png'), locked: require('@/assets/art/badges/week_warrior-locked.png') },
+  "10_day_streak": { earned: require('@/assets/art/badges/10_day_streak.png'), locked: require('@/assets/art/badges/10_day_streak-locked.png') },
+  "two_week_titan": { earned: require('@/assets/art/badges/two_week_titan.png'), locked: require('@/assets/art/badges/two_week_titan-locked.png') },
+  "21_day_streak": { earned: require('@/assets/art/badges/21_day_streak.png'), locked: require('@/assets/art/badges/21_day_streak-locked.png') },
+  "monthly_master": { earned: require('@/assets/art/badges/monthly_master.png'), locked: require('@/assets/art/badges/monthly_master-locked.png') },
+  "10_completions": { earned: require('@/assets/art/badges/10_completions.png'), locked: require('@/assets/art/badges/10_completions-locked.png') },
+  "25_completions": { earned: require('@/assets/art/badges/25_completions.png'), locked: require('@/assets/art/badges/25_completions-locked.png') },
+  "50_completions": { earned: require('@/assets/art/badges/50_completions.png'), locked: require('@/assets/art/badges/50_completions-locked.png') },
+  "century_club": { earned: require('@/assets/art/badges/century_club.png'), locked: require('@/assets/art/badges/century_club-locked.png') },
+};

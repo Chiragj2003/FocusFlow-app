@@ -1,5 +1,6 @@
 import React, { memo, useMemo, useCallback } from 'react';
-import { View, Text, Pressable } from 'react-native';
+import { Image, View, Text, Pressable } from 'react-native';
+import { habitArt } from '@/lib/habitArt';
 import { Ionicons } from '@expo/vector-icons';
 import { Habit, HabitEntry } from '@/lib/types';
 import { Tap } from '@/components/ui/Tap';
@@ -98,7 +99,7 @@ const HabitRow = memo(({
         accessibilityLabel={`${habit.title}, manage`}
         style={{ flex: 1, flexDirection: 'row', alignItems: 'center', marginRight: 6, minWidth: 0 }}
       >
-        <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: color, marginRight: 8 }} />
+        <Image source={habitArt(habit)} style={{ width: 24, height: 24, marginRight: 8 }} resizeMode="contain" />
         <Text style={{ color: colors.text, fontWeight: '600', fontSize: 14, flex: 1 }} numberOfLines={2}>
           {habit.title}
         </Text>

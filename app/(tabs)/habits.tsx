@@ -18,6 +18,7 @@ import {
   useRestoreHabit,
   useToggleEntry,
 } from '@/lib/hooks';
+import { templateArt } from '@/lib/habitArt';
 import { messages } from '@/lib/messages';
 import { HABIT_TEMPLATES, getTemplateCategories } from '@/lib/templates';
 import { useTheme } from '@/lib/ThemeContext';
@@ -27,7 +28,7 @@ import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Habit colors matching the web app
@@ -427,7 +428,7 @@ export default function HabitsScreen() {
                   style={{ flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 20, backgroundColor: colors.backgroundSecondary, marginBottom: 10 }}
                 >
                   <View style={{ width: 46, height: 46, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: `${template.color}22`, marginRight: 12 }}>
-                    <Text style={{ fontSize: 22 }}>{template.icon}</Text>
+                    <Image source={templateArt(template.id)} style={{ width: 32, height: 32 }} resizeMode="contain" accessibilityIgnoresInvertColors />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={{ color: colors.text, fontWeight: '700', fontSize: 15 }}>{template.title}</Text>

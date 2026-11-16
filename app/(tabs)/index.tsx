@@ -8,6 +8,7 @@ import { Tap } from '@/components/ui/Tap';
 import { BADGES as AVAILABLE_BADGES, findEarned } from '@/lib/badgeCatalog';
 import { celebrate, toast } from '@/lib/celebrate';
 import { getToday, useAwardBadge, useBadges, useEntries, useHabits, useInsights, useStreaks, useToggleEntry } from '@/lib/hooks';
+import { habitArt } from '@/lib/habitArt';
 import { messages } from '@/lib/messages';
 import { getDailyQuote } from '@/lib/quotes';
 import { useTheme } from '@/lib/ThemeContext';
@@ -22,33 +23,6 @@ import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, Text, 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type IconName = keyof typeof Ionicons.glyphMap;
-
-const CATEGORY_ICONS: Record<string, IconName> = {
-  health: 'heart',
-  fitness: 'barbell',
-  learning: 'book',
-  mindfulness: 'flower',
-  productivity: 'laptop',
-  social: 'people',
-  creative: 'color-palette',
-};
-
-const KEYWORD_ICONS: [RegExp, IconName][] = [
-  [/water|drink|hydrat/i, 'water'],
-  [/sleep|bed|rest/i, 'moon'],
-  [/read|book/i, 'book'],
-  [/walk|step|run/i, 'walk'],
-  [/gym|workout|exercise|push|lift/i, 'barbell'],
-  [/medita|breath|mind/i, 'flower'],
-  [/code|work|focus|study/i, 'laptop'],
-  [/food|eat|junk|diet|fruit|veg/i, 'nutrition'],
-  [/journal|write/i, 'create'],
-];
-
-function habitIcon(h: Habit): IconName {
-  for (const [re, icon] of KEYWORD_ICONS) if (re.test(h.title)) return icon;
-  return CATEGORY_ICONS[(h.category || '').toLowerCase()] ?? 'sparkles';
-}
 
 export default function DashboardScreen() {
   const { isDark, colors } = useTheme();
@@ -305,7 +279,7 @@ export default function DashboardScreen() {
                   }}
                 >
                   <View style={{ width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: `${color}22`, marginRight: 12 }}>
-                    <Ionicons name={habitIcon(habit)} size={22} color={color} />
+                    <Image source={habitArt(habit)} style={{ width: 32, height: 32 }} resizeMode="contain" />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text

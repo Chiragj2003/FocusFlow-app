@@ -4,24 +4,27 @@ import { Image } from 'react-native';
 import Svg, { Defs, LinearGradient, Path, Stop } from 'react-native-svg';
 
 const LOGO = require('@/assets/brand/logo.png');
+const LOGO_LIGHT = require('@/assets/brand/logo-light.png');
 
 interface FlameMarkProps {
   size?: number;
-  /** 'brand' = orange gradient, otherwise a solid color (e.g. '#ffffff') */
+  /** 'brand' = official logo art, otherwise a solid-color vector (e.g. '#ffffff') */
   color?: 'brand' | string;
-  /** Always use the logo artwork (for surfaces that are dark in both themes) */
+  /** Use the dark-surface logo even in light mode (for always-dark tiles) */
   onDark?: boolean;
 }
 
 /**
  * The FocusFlow flame-check mark: a flame rising out of a checkmark.
- * On dark surfaces it shows the official logo artwork; on light surfaces a vector
- * version (the artwork's inner shading only reads well on dark backgrounds).
+ * 'brand' shows the official logo art (dark- or light-surface version);
+ * any other color draws a single-color vector of the mark.
  */
 export function FlameMark({ size = 32, color = 'brand', onDark }: FlameMarkProps) {
   const { isDark } = useTheme();
-  if (color === 'brand' && (onDark || isDark)) {
-    return <Image source={LOGO} style={{ width: size, height: size }} resizeMode="contain" accessibilityIgnoresInvertColors />;
+  if (color === 'brand') {
+    // Official logo art: standard on dark surfaces, deeper-orange version on light ones
+    const source = onDark || isDark ? LOGO : LOGO_LIGHT;
+    return <Image source={source} style={{ width: size, height: size }} resizeMode="contain" accessibilityIgnoresInvertColors />;
   }
 
   const fill = color === 'brand' ? 'url(#ffFlame)' : color;

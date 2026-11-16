@@ -6,6 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useState } from 'react';
 import {
     ActivityIndicator,
+    Image,
     Pressable,
     RefreshControl,
     ScrollView,
@@ -16,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ALL_ACHIEVEMENTS } from '@/lib/constants';
 import { useUserChallenges, useJoinChallenge } from '@/lib/hooks';
 import { toast } from '@/lib/celebrate';
+import { CHALLENGE_ART } from '@/lib/artAssets';
 
 function AchievementCard({ 
   achievement, 
@@ -66,14 +68,20 @@ function AchievementCard({
       className="rounded-2xl p-5 mb-4 shadow-sm border"
     >
       <View className="flex-row items-start">
-        <LinearGradient
-          colors={gradientColors as [string, string]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{ width: 56, height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }}
-        >
-          <Ionicons name={getIcon(achievement.type) as any} size={28} color="#fff" />
-        </LinearGradient>
+        <View style={{ width: 56, height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.backgroundSecondary }}>
+          {CHALLENGE_ART[achievement.type] ? (
+            <Image source={CHALLENGE_ART[achievement.type]} style={{ width: 40, height: 40 }} resizeMode="contain" />
+          ) : (
+            <LinearGradient
+              colors={gradientColors as [string, string]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{ width: 56, height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Ionicons name={getIcon(achievement.type) as any} size={28} color="#fff" />
+            </LinearGradient>
+          )}
+        </View>
         
         <View className="flex-1 ml-4">
           <View className="flex-row items-center justify-between mb-1">
@@ -132,7 +140,7 @@ function AchievementCard({
             
             <View className="flex-row items-center justify-between mt-1">
               <View className="flex-row items-center bg-yellow-500/10 px-3 py-1.5 rounded-lg">
-                <Ionicons name="star" size={16} color="#eab308" />
+                <Image source={CHALLENGE_ART.xp} style={{ width: 18, height: 18 }} resizeMode="contain" />
                 <Text className="text-yellow-600 dark:text-yellow-500 text-sm font-bold ml-1.5">{achievement.reward} XP</Text>
               </View>
               
