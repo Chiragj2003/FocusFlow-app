@@ -6,6 +6,7 @@ import type { Badge } from '@/lib/api';
 import { StreakFlame } from '@/components/ui/StreakFlame';
 import { Tap } from '@/components/ui/Tap';
 import { BADGES as AVAILABLE_BADGES, findEarned } from '@/lib/badgeCatalog';
+import { SHOW_CHALLENGES } from '@/lib/constants';
 import { celebrate, toast } from '@/lib/celebrate';
 import { getToday, useAwardBadge, useBadges, useEntries, useHabits, useInsights, useStreaks, useToggleEntry } from '@/lib/hooks';
 import { habitArt } from '@/lib/habitArt';
@@ -341,7 +342,7 @@ export default function DashboardScreen() {
               title: 'Challenges',
               subtitle: 'Join one, earn XP',
             },
-          ].map((item) => (
+          ].filter((item) => SHOW_CHALLENGES || item.key !== 'challenges').map((item) => (
             <Tap
               key={item.key}
               onPress={() => router.push(item.href)}

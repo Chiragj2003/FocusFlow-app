@@ -14,7 +14,8 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ACTIVE_ACHIEVEMENTS } from '@/lib/constants';
+import { ACTIVE_ACHIEVEMENTS, SHOW_CHALLENGES } from '@/lib/constants';
+import { Redirect } from 'expo-router';
 import { useUserChallenges, useJoinChallenge } from '@/lib/hooks';
 import { toast } from '@/lib/celebrate';
 import { CHALLENGE_ART } from '@/lib/artAssets';
@@ -177,7 +178,13 @@ function AchievementCard({
   );
 }
 
-export default function AchievementsScreen() {
+// Hidden for now: any link to this screen goes back to Home
+export default function AchievementsRoute() {
+  if (!SHOW_CHALLENGES) return <Redirect href="/" />;
+  return <AchievementsScreen />;
+}
+
+function AchievementsScreen() {
   const { isDark, colors } = useTheme();
   const [activeTab, setActiveTab] = useState<'available' | 'joined'>('available');
   const [refreshing, setRefreshing] = useState(false);
