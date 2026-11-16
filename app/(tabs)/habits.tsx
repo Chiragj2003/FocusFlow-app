@@ -4,6 +4,7 @@ import { Mascot } from '@/components/ui/Mascot';
 import { ProgressRing } from '@/components/ui/ProgressRing';
 import { formatReminder, ReminderSheet } from '@/components/ui/ReminderSheet';
 import { ActionSheet, ConfirmSheet, Sheet } from '@/components/ui/Sheet';
+import { Tap } from '@/components/ui/Tap';
 import { toast } from '@/lib/celebrate';
 import { localStorage } from '@/lib/localStorage';
 import { notificationsManager } from '@/lib/notifications';
@@ -304,7 +305,7 @@ export default function HabitsScreen() {
             )}
 
             {/* Primary actions */}
-            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 22 }}>
               <GradientButton label="New habit" icon="add" onPress={openNewHabit} style={{ flex: 1 }} />
               <GradientButton
                 label="Templates"
@@ -312,38 +313,26 @@ export default function HabitsScreen() {
                 variant="ghost"
                 ghostColors={{ bg: colors.card, text: colors.text, border: colors.cardBorder }}
                 onPress={openTemplates}
+                style={{ flex: 1 }}
               />
             </View>
-
-            {/* Secondary shortcuts */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 6 }} style={{ marginBottom: 18 }}>
-              <Pressable onPress={() => setShowArchived(true)} accessibilityRole="button" style={chip(false)}>
-                <Ionicons name="archive-outline" size={15} color={colors.textMuted} />
-                <Text style={{ color: colors.textSecondary, fontWeight: '600', fontSize: 13, marginLeft: 6 }}>
-                  Archived ({archivedHabits?.length || 0})
-                </Text>
-              </Pressable>
-              <Pressable onPress={() => router.push('/focus')} accessibilityRole="button" style={chip(false)}>
-                <Ionicons name="timer-outline" size={15} color={colors.textMuted} />
-                <Text style={{ color: colors.textSecondary, fontWeight: '600', fontSize: 13, marginLeft: 6 }}>Focus timer</Text>
-              </Pressable>
-              <Pressable onPress={() => router.push('/achievements')} accessibilityRole="button" style={chip(false)}>
-                <Ionicons name="trophy-outline" size={15} color={colors.textMuted} />
-                <Text style={{ color: colors.textSecondary, fontWeight: '600', fontSize: 13, marginLeft: 6 }}>Achievements</Text>
-              </Pressable>
-            </ScrollView>
           </>
         )}
 
         {/* Section header */}
         {habits && habits.length > 0 && (
-          <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <Text style={{ color: colors.text, fontSize: 18, fontWeight: '800' }}>
-              {showArchived ? 'Archived habits' : 'Your habits'}
+              {showArchived ? 'Archived habits' : `Your habits (${habits.length})`}
             </Text>
-            <Text style={{ color: colors.textMuted, fontSize: 13 }}>
-              {habits.length} {habits.length === 1 ? 'habit' : 'habits'}
-            </Text>
+            {!showArchived && (
+              <Pressable onPress={() => setShowArchived(true)} accessibilityRole="button" hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="archive-outline" size={15} color={colors.textMuted} />
+                <Text style={{ color: colors.textMuted, fontWeight: '600', fontSize: 13, marginLeft: 4 }}>
+                  Archived ({archivedHabits?.length || 0})
+                </Text>
+              </Pressable>
+            )}
           </View>
         )}
 
@@ -453,23 +442,23 @@ export default function HabitsScreen() {
                       <Text style={{ color: colors.success, fontWeight: '700', fontSize: 12, marginLeft: 4 }}>Added</Text>
                     </View>
                   ) : (
-                    <Pressable
+                    <Tap
                       onPress={() => handleAddTemplate(template)}
                       accessibilityRole="button"
                       accessibilityLabel={`Add ${template.title}`}
                       hitSlop={6}
-                      style={({ pressed }) => ({
+                      pressedStyle={{ transform: [{ scale: 0.92 }] }}
+                      style={{
                         width: 38,
                         height: 38,
                         borderRadius: 19,
                         alignItems: 'center',
                         justifyContent: 'center',
                         backgroundColor: colors.primary,
-                        transform: [{ scale: pressed ? 0.92 : 1 }],
-                      })}
+                      }}
                     >
                       <Ionicons name="add" size={22} color="#ffffff" />
-                    </Pressable>
+                    </Tap>
                   )}
                 </View>
               );

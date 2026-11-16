@@ -16,6 +16,7 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { BrandMark } from '@/components/ui/BrandMark';
 
 // Required for OAuth to work properly
 WebBrowser.maybeCompleteAuthSession();
@@ -134,10 +135,10 @@ export default function SignInScreen() {
         >
           {/* Logo/Brand */}
           <View className="items-center mb-8">
-            <View className="w-20 h-20 rounded-2xl bg-white items-center justify-center mb-4">
-              <Ionicons name="flame" size={40} color="#f97316" />
-            </View>
-            <Text className="text-3xl font-bold text-white">FocusFlow</Text>
+            <BrandMark />
+            <Text style={{ fontSize: 32, fontWeight: '800', color: '#ffffff', letterSpacing: -0.5 }}>
+              Focus<Text style={{ color: '#f97316' }}>Flow</Text>
+            </Text>
             <Text className="text-zinc-400 mt-2 text-center">
               Welcome back! Sign in to continue
             </Text>

@@ -62,21 +62,6 @@ export default function OnboardingScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
 
-      {/* Warm glow behind the art */}
-      <View
-        pointerEvents="none"
-        style={{
-          position: 'absolute',
-          top: '12%',
-          alignSelf: 'center',
-          width: artSize * 1.3,
-          height: artSize * 1.3,
-          borderRadius: artSize,
-          backgroundColor: colors.primary,
-          opacity: isDark ? 0.12 : 0.08,
-        }}
-      />
-
       {/* Top bar */}
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 8 }}>
         <FlameMark size={26} />
@@ -101,17 +86,31 @@ export default function OnboardingScreen() {
       >
         {SLIDES.map((s) => (
           <View key={s.key} style={{ width, flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
-            {s.art === 'grow' ? (
-              <View style={{ alignItems: 'center' }}>
-                <Mascot mood="celebrate" size={artSize * 0.85} source={require('@/assets/milestones/m30.png')} />
-                <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginTop: 4 }}>
-                  {[1, 3, 7, 14, 30, 100].map((d, i) => (
-                    <StreakFlame key={d} days={d} size={22 + i * 5} />
-                  ))}
-                </View>
+            {/* Art with a warm glow centered right behind it */}
+            <View style={{ width: artSize, height: artSize, alignItems: 'center', justifyContent: 'center' }}>
+              <View
+                pointerEvents="none"
+                style={{
+                  position: 'absolute',
+                  width: artSize * 0.82,
+                  height: artSize * 0.82,
+                  borderRadius: artSize,
+                  backgroundColor: colors.primary,
+                  opacity: isDark ? 0.14 : 0.09,
+                }}
+              />
+              {s.art === 'grow' ? (
+                <Mascot mood="celebrate" size={artSize} source={require('@/assets/milestones/m30.png')} />
+              ) : (
+                <Mascot mood={s.art === 'wave' ? 'happy' : 'focus'} size={artSize} />
+              )}
+            </View>
+            {s.art === 'grow' && (
+              <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginTop: 4 }}>
+                {[1, 3, 7, 14, 30, 100].map((d, i) => (
+                  <StreakFlame key={d} days={d} size={22 + i * 5} />
+                ))}
               </View>
-            ) : (
-              <Mascot mood={s.art === 'wave' ? 'happy' : 'focus'} size={artSize} />
             )}
             <Text accessibilityRole="header" style={{ color: colors.text, fontSize: 30, fontWeight: '800', textAlign: 'center', marginTop: 28, letterSpacing: -0.5 }}>
               {s.title}

@@ -10,7 +10,7 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { LogBox } from 'react-native';
+import { LogBox, View } from 'react-native';
 import 'react-native-reanimated';
 import '../global.css';
 
@@ -54,11 +54,12 @@ if (!publishableKey) {
 
 
 function RootLayoutNav() {
-  const { isDark } = useTheme();
+  const { isDark, colors } = useTheme();
 
   return (
-    <>
-      <Stack>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* App background behind every screen, so no white shows through edges or transitions */}
+      <Stack screenOptions={{ contentStyle: { backgroundColor: colors.background } }}>
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false, animation: 'fade' }} />
@@ -66,7 +67,7 @@ function RootLayoutNav() {
       </Stack>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <CelebrationHost />
-    </>
+    </View>
   );
 }
 

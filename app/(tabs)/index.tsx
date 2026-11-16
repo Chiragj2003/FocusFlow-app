@@ -4,6 +4,7 @@ import { Mascot, MascotMood } from '@/components/ui/Mascot';
 import { ProgressRing } from '@/components/ui/ProgressRing';
 import type { Badge } from '@/lib/api';
 import { StreakFlame } from '@/components/ui/StreakFlame';
+import { Tap } from '@/components/ui/Tap';
 import { celebrate, toast } from '@/lib/celebrate';
 import { getToday, useAwardBadge, useBadges, useEntries, useHabits, useInsights, useStreaks, useToggleEntry } from '@/lib/hooks';
 import { messages } from '@/lib/messages';
@@ -257,7 +258,9 @@ export default function DashboardScreen() {
                         borderRadius: 13,
                         alignItems: 'center',
                         justifyContent: 'center',
-                        backgroundColor: done ? colors.primary : colors.backgroundSecondary,
+                        backgroundColor: done ? colors.primary : 'transparent',
+                        borderWidth: done ? 0 : 2,
+                        borderColor: colors.borderSecondary,
                       }}
                     >
                       {done && <Ionicons name="checkmark" size={15} color="#ffffff" />}
@@ -304,21 +307,20 @@ export default function DashboardScreen() {
               const streak = streakByHabit.get(habit.id) || 0;
               const color = habit.color || colors.primary;
               return (
-                <Pressable
+                <Tap
                   key={habit.id}
                   onPress={() => toggle(habit)}
                   accessibilityRole="checkbox"
                   accessibilityState={{ checked: done }}
                   accessibilityLabel={`${habit.title}${streak ? `, ${streak} day streak` : ''}`}
-                  style={({ pressed }) => ({
+                  style={{
                     ...card,
                     borderRadius: 20,
                     padding: 12,
                     marginBottom: 10,
                     flexDirection: 'row',
                     alignItems: 'center',
-                    opacity: pressed ? 0.85 : 1,
-                  })}
+                  }}
                 >
                   <View style={{ width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: `${color}22`, marginRight: 12 }}>
                     <Ionicons name={habitIcon(habit)} size={22} color={color} />
@@ -351,7 +353,7 @@ export default function DashboardScreen() {
                   >
                     {done && <Ionicons name="checkmark" size={18} color="#ffffff" />}
                   </View>
-                </Pressable>
+                </Tap>
               );
             })}
           </View>

@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
-import { ActivityIndicator, Pressable, StyleProp, Text, View, ViewStyle } from 'react-native';
+import { ActivityIndicator, StyleProp, Text, View, ViewStyle } from 'react-native';
+import { Tap } from './Tap';
 
 interface GradientButtonProps {
   label: string;
@@ -64,14 +65,15 @@ export function GradientButton({
   );
 
   return (
-    <Pressable
+    <Tap
       onPress={onPress}
       disabled={disabled || loading}
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ disabled: !!(disabled || loading) }}
-      style={({ pressed }) => [
-        { borderRadius: 999, opacity: disabled ? 0.5 : pressed ? 0.85 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] },
+      pressedStyle={{ opacity: 0.85, transform: [{ scale: 0.98 }] }}
+      style={[
+        { borderRadius: 999, opacity: disabled ? 0.5 : 1 },
         variant === 'primary' && {
           shadowColor: '#f97316',
           shadowOpacity: 0.35,
@@ -103,6 +105,6 @@ export function GradientButton({
           {content}
         </View>
       )}
-    </Pressable>
+    </Tap>
   );
 }

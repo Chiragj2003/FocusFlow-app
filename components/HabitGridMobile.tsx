@@ -2,6 +2,7 @@ import React, { memo, useMemo, useCallback } from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Habit, HabitEntry } from '@/lib/types';
+import { Tap } from '@/components/ui/Tap';
 
 interface HabitGridMobileProps {
   habits: Habit[];
@@ -43,13 +44,14 @@ const DayCell = memo(({
   }, [habitId, date, completed, onToggle]);
 
   return (
-    <Pressable
+    <Tap
       onPress={handlePress}
       hitSlop={3}
       accessibilityRole="checkbox"
       accessibilityState={{ checked: completed }}
       accessibilityLabel={`${habitTitle}, ${date}`}
-      style={({ pressed }) => ({
+      pressedStyle={{ transform: [{ scale: 0.9 }] }}
+      style={{
         width: CELL,
         height: CELL,
         marginHorizontal: 2,
@@ -59,11 +61,10 @@ const DayCell = memo(({
         borderColor: isToday ? todayBorder : emptyBorder,
         alignItems: 'center',
         justifyContent: 'center',
-        transform: [{ scale: pressed ? 0.9 : 1 }],
-      })}
+      }}
     >
       {completed && <Ionicons name="checkmark" size={18} color="#ffffff" />}
-    </Pressable>
+    </Tap>
   );
 });
 DayCell.displayName = 'DayCell';

@@ -2,6 +2,7 @@ import { FlameMark } from '@/components/ui/FlameMark';
 import { GradientButton } from '@/components/ui/GradientButton';
 import { ProgressRing } from '@/components/ui/ProgressRing';
 import { Sheet } from '@/components/ui/Sheet';
+import { Tap } from '@/components/ui/Tap';
 import { Habit } from '@/lib/api';
 import { celebrate, toast } from '@/lib/celebrate';
 import { getToday, useCreateFocusSession, useFocusStats, useHabits, useToggleEntry } from '@/lib/hooks';
@@ -277,33 +278,85 @@ export default function FocusTimerScreen() {
           </View>
         </View>
 
+        {/* Quick length (focus mode, before starting) */}
+        {mode === 'focus' && timerState === 'idle' && (
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 22 }}>
+            {FOCUS_PRESETS.map((m) => {
+              const active = focusMinutes === m;
+              return (
+                <Pressable
+                  key={m}
+                  onPress={() => {
+                    setFocusMinutes(m);
+                    Haptics.selectionAsync().catch(() => {});
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${m} minutes`}
+                  accessibilityState={{ selected: active }}
+                  style={{
+                    flex: 1,
+                    height: 40,
+                    borderRadius: 999,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: active ? colors.primarySoft : colors.card,
+                    borderWidth: 1,
+                    borderColor: active ? colors.primary : colors.cardBorder,
+                  }}
+                >
+                  <Text style={{ color: active ? colors.primary : colors.textSecondary, fontWeight: '800', fontSize: 14 }}>{m}m</Text>
+                </Pressable>
+              );
+            })}
+            <Pressable
+              onPress={() => setSheet('length')}
+              accessibilityRole="button"
+              accessibilityLabel="Custom length"
+              style={{
+                flex: 1.2,
+                height: 40,
+                borderRadius: 999,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: FOCUS_PRESETS.includes(focusMinutes) ? colors.card : colors.primarySoft,
+                borderWidth: 1,
+                borderColor: FOCUS_PRESETS.includes(focusMinutes) ? colors.cardBorder : colors.primary,
+              }}
+            >
+              <Text style={{ color: FOCUS_PRESETS.includes(focusMinutes) ? colors.textSecondary : colors.primary, fontWeight: '800', fontSize: 14 }}>
+                {FOCUS_PRESETS.includes(focusMinutes) ? 'Custom' : `${focusMinutes}m`}
+              </Text>
+            </Pressable>
+          </View>
+        )}
+
         {/* Controls */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 22, marginBottom: 24 }}>
           <Pressable onPress={reset} disabled={timerState === 'idle'} accessibilityRole="button" accessibilityLabel="Reset timer" style={[roundBtn(58), { opacity: timerState === 'idle' ? 0.4 : 1 }]}>
             <Ionicons name="refresh" size={24} color={colors.text} />
           </Pressable>
 
-          <Pressable
+          <Tap
             onPress={running ? pause : start}
             accessibilityRole="button"
             accessibilityLabel={running ? 'Pause' : timerState === 'paused' ? 'Resume' : 'Start'}
-            style={({ pressed }) => ({
+            pressedStyle={{ transform: [{ scale: 0.95 }] }}
+            style={{
               width: 88,
               height: 88,
               borderRadius: 44,
               alignItems: 'center',
               justifyContent: 'center',
               backgroundColor: colors.primary,
-              transform: [{ scale: pressed ? 0.95 : 1 }],
               shadowColor: '#f97316',
               shadowOpacity: 0.5,
               shadowRadius: 18,
               shadowOffset: { width: 0, height: 6 },
               elevation: 8,
-            })}
+            }}
           >
             <Ionicons name={running ? 'pause' : 'play'} size={38} color="#ffffff" style={{ marginLeft: running ? 0 : 4 }} />
-          </Pressable>
+          </Tap>
 
           <Pressable onPress={skip} disabled={timerState === 'idle'} accessibilityRole="button" accessibilityLabel={mode === 'focus' ? 'End session without saving' : 'Skip break'} style={[roundBtn(58), { opacity: timerState === 'idle' ? 0.4 : 1 }]}>
             <Ionicons name={mode === 'focus' ? 'stop' : 'play-skip-forward'} size={22} color={colors.text} />
@@ -317,28 +370,28 @@ export default function FocusTimerScreen() {
             { key: 'habit' as const, icon: 'link-outline' as IconName, label: 'Habit', value: selectedHabit?.title ?? 'None' },
             { key: 'length' as const, icon: 'hourglass-outline' as IconName, label: 'Length', value: mode === 'focus' ? `${focusMinutes} min` : `${durationSec / 60} min` },
           ].map((item, i) => (
-            <Pressable
+            <Tap
               key={item.key}
               onPress={() => setSheet(item.key)}
               disabled={item.key === 'length' && (mode !== 'focus' || timerState !== 'idle')}
               accessibilityRole="button"
               accessibilityLabel={`${item.label}: ${item.value}`}
-              style={({ pressed }) => ({
+              pressedStyle={{ opacity: 0.7 }}
+              style={{
                 flex: 1,
                 alignItems: 'center',
                 paddingVertical: 14,
                 paddingHorizontal: 6,
                 borderLeftWidth: i > 0 ? 1 : 0,
                 borderLeftColor: colors.cardBorder,
-                opacity: pressed ? 0.7 : 1,
-              })}
+              }}
             >
               <Ionicons name={item.icon} size={20} color={colors.primary} />
               <Text style={{ color: colors.textMuted, fontSize: 11, fontWeight: '600', marginTop: 6 }}>{item.label}</Text>
-              <Text style={{ color: colors.text, fontSize: 13, fontWeight: '700', marginTop: 2 }} numberOfLines={1}>
+              <Text style={{ color: colors.text, fontSize: 13, fontWeight: '700', marginTop: 2, textAlign: 'center' }} numberOfLines={1}>
                 {item.value}
               </Text>
-            </Pressable>
+            </Tap>
           ))}
         </View>
 
@@ -462,20 +515,21 @@ function OptionRow({ icon, dotColor, label, selected, colors, onPress }: {
   onPress: () => void;
 }) {
   return (
-    <Pressable
+    <Tap
       onPress={onPress}
       accessibilityRole="radio"
       accessibilityState={{ selected }}
-      style={({ pressed }) => ({
+      pressedStyle={selected ? undefined : { backgroundColor: colors.backgroundTertiary }}
+      style={{
         flexDirection: 'row',
         alignItems: 'center',
         padding: 12,
         borderRadius: 16,
         marginBottom: 8,
-        backgroundColor: selected ? colors.primarySoft : pressed ? colors.backgroundTertiary : colors.backgroundSecondary,
+        backgroundColor: selected ? colors.primarySoft : colors.backgroundSecondary,
         borderWidth: 1,
         borderColor: selected ? 'rgba(249,115,22,0.45)' : 'transparent',
-      })}
+      }}
     >
       <View style={{ width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card, marginRight: 12 }}>
         {dotColor ? (
@@ -486,6 +540,6 @@ function OptionRow({ icon, dotColor, label, selected, colors, onPress }: {
       </View>
       <Text style={{ color: colors.text, fontSize: 15, fontWeight: '600', flex: 1 }} numberOfLines={1}>{label}</Text>
       {selected && <Ionicons name="checkmark-circle" size={22} color={colors.primary} />}
-    </Pressable>
+    </Tap>
   );
 }

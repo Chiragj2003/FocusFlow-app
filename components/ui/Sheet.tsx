@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Tap } from './Tap';
 
 interface SheetProps {
   visible: boolean;
@@ -89,7 +90,7 @@ export function ActionSheet({ visible, onClose, title, subtitle, actions }: Acti
       {actions.map((a) => {
         const tint = a.destructive ? colors.error : colors.text;
         return (
-          <Pressable
+          <Tap
             key={a.label}
             onPress={() => {
               onClose();
@@ -97,15 +98,16 @@ export function ActionSheet({ visible, onClose, title, subtitle, actions }: Acti
               setTimeout(a.onPress, 250);
             }}
             accessibilityRole="button"
-            style={({ pressed }) => ({
+            pressedStyle={{ backgroundColor: colors.backgroundTertiary }}
+            style={{
               flexDirection: 'row',
               alignItems: 'center',
               paddingVertical: 14,
               paddingHorizontal: 14,
               borderRadius: 16,
               marginBottom: 8,
-              backgroundColor: pressed ? colors.backgroundTertiary : colors.backgroundSecondary,
-            })}
+              backgroundColor: colors.backgroundSecondary,
+            }}
           >
             {a.icon && (
               <View
@@ -123,7 +125,7 @@ export function ActionSheet({ visible, onClose, title, subtitle, actions }: Acti
               </View>
             )}
             <Text style={{ color: tint, fontSize: 16, fontWeight: '600' }}>{a.label}</Text>
-          </Pressable>
+          </Tap>
         );
       })}
     </Sheet>
