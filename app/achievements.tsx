@@ -236,8 +236,8 @@ export default function AchievementsScreen() {
           className="flex-row p-1 rounded-xl border shadow-sm"
         >
           <Pressable 
-            className={`flex-1 py-2.5 items-center rounded-lg ${activeTab === 'available' ? 'shadow-sm' : ''}`}
-            style={{ backgroundColor: activeTab === 'available' ? colors.backgroundSecondary : 'transparent' }}
+            className="flex-1 py-2.5 items-center rounded-lg"
+            style={{ backgroundColor: activeTab === 'available' ? colors.backgroundSecondary : 'transparent', shadowColor: '#000', shadowOpacity: activeTab === 'available' ? 0.08 : 0, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: activeTab === 'available' ? 1 : 0 }}
             onPress={() => {
               setActiveTab('available');
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -251,8 +251,8 @@ export default function AchievementsScreen() {
             </Text>
           </Pressable>
           <Pressable 
-            className={`flex-1 py-2.5 items-center rounded-lg ${activeTab === 'joined' ? 'shadow-sm' : ''}`}
-            style={{ backgroundColor: activeTab === 'joined' ? colors.backgroundSecondary : 'transparent' }}
+            className="flex-1 py-2.5 items-center rounded-lg"
+            style={{ backgroundColor: activeTab === 'joined' ? colors.backgroundSecondary : 'transparent', shadowColor: '#000', shadowOpacity: activeTab === 'joined' ? 0.08 : 0, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: activeTab === 'joined' ? 1 : 0 }}
             onPress={() => {
               setActiveTab('joined');
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
