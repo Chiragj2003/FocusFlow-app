@@ -207,12 +207,12 @@ export default function AchievementsScreen() {
   );
 
   return (
-    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.background }}>
+    <SafeAreaView edges={['bottom']} style={{ flex: 1, backgroundColor: colors.background }}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       
       {/* Header */}
       <View className="px-6 pt-2 pb-4">
-        <Text style={{ color: colors.text }} className="text-3xl font-black tracking-tight">Achievements</Text>
+        <Text style={{ color: colors.text }} className="text-3xl font-black tracking-tight">Challenges</Text>
         <Text style={{ color: colors.textMuted }} className="mt-1 font-medium">Challenge yourself and earn huge XP rewards.</Text>
       </View>
 

@@ -1,17 +1,29 @@
+import { useTheme } from '@/lib/ThemeContext';
 import React from 'react';
+import { Image } from 'react-native';
 import Svg, { Defs, LinearGradient, Path, Stop } from 'react-native-svg';
+
+const LOGO = require('@/assets/brand/logo.png');
 
 interface FlameMarkProps {
   size?: number;
   /** 'brand' = orange gradient, otherwise a solid color (e.g. '#ffffff') */
   color?: 'brand' | string;
+  /** Always use the logo artwork (for surfaces that are dark in both themes) */
+  onDark?: boolean;
 }
 
 /**
  * The FocusFlow flame-check mark: a flame rising out of a checkmark.
- * Drawn as vectors so it stays crisp at any size and works in both themes.
+ * On dark surfaces it shows the official logo artwork; on light surfaces a vector
+ * version (the artwork's inner shading only reads well on dark backgrounds).
  */
-export function FlameMark({ size = 32, color = 'brand' }: FlameMarkProps) {
+export function FlameMark({ size = 32, color = 'brand', onDark }: FlameMarkProps) {
+  const { isDark } = useTheme();
+  if (color === 'brand' && (onDark || isDark)) {
+    return <Image source={LOGO} style={{ width: size, height: size }} resizeMode="contain" accessibilityIgnoresInvertColors />;
+  }
+
   const fill = color === 'brand' ? 'url(#ffFlame)' : color;
   const fillCheck = color === 'brand' ? 'url(#ffCheck)' : color;
   return (

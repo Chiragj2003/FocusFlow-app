@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { flameForStreak, milestoneImage } from '@/components/ui/StreakFlame';
 import { celebrate } from './celebrate';
+import { safeHabitColor } from './habitColor';
 import { messages } from './messages';
 import { notificationsManager } from './notifications';
 import { localStorage } from './localStorage';
@@ -48,6 +49,14 @@ function debouncedInvalidateInsights(queryClient: ReturnType<typeof useQueryClie
 // HABITS HOOKS - Mobile-First Local Storage Priority
 // =====================
 
+// Stable function reference so React Query can memoize the selected result
+function withSafeColors(habits: Habit[] | undefined): Habit[] {
+  return (habits || []).map((h) => {
+    const color = safeHabitColor(h.color);
+    return color === h.color ? h : { ...h, color };
+  });
+}
+
 export function useHabits(active?: boolean) {
   return useQuery({
     queryKey: active === undefined ? queryKeys.habits : active ? queryKeys.habitsActive : queryKeys.habitsArchived,
@@ -66,6 +75,8 @@ export function useHabits(active?: boolean) {
         return local.filter((h) => (active === undefined ? true : h.active === active));
       }
     },
+    // Display-safe colors (no white/black habits, so ticks and dots stay visible)
+    select: withSafeColors,
     staleTime: 60 * 1000, // 60 seconds stale time
     gcTime: 15 * 60 * 1000,
     refetchOnMount: false,

@@ -96,8 +96,6 @@ export default function TabLayout() {
       <Tabs.Screen name="focus" options={{ title: 'Focus', tabBarIcon: icon('timer-outline', 'timer') }} />
       <Tabs.Screen name="insights" options={{ title: 'Insights', tabBarIcon: icon('stats-chart-outline', 'stats-chart') }} />
       <Tabs.Screen name="settings" options={{ title: 'Settings', tabBarIcon: icon('settings-outline', 'settings') }} />
-      <Tabs.Screen name="achievements" options={{ href: null }} />
-      <Tabs.Screen name="badges" options={{ href: null }} />
     </Tabs>
   );
 }

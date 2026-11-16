@@ -308,54 +308,39 @@ export default function InsightsScreen() {
         {activeTab === 'insights' ? (
           /* INSIGHTS TAB */
           <View>
-            <View className="flex-row justify-between gap-3 mt-4">
-              <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="flex-1 rounded-xl border p-4 items-center min-h-[110px] justify-center">
-                <View className="w-8 h-8 rounded-full bg-emerald-500/10 items-center justify-center mb-2">
-                  <Ionicons name="checkmark-circle" size={18} color="#10b981" />
-                </View>
-                <Text style={{ color: colors.text }} className="text-2xl font-bold text-center">{monthlyCompletion}%</Text>
-                <Text style={{ color: colors.textMuted }} className="text-xs mt-1 text-center">Success Rate</Text>
+            {/* Stats: even 3x2 grid (plain styles; NativeWind flex-1 split widths unevenly) */}
+            {[
+              [
+                { icon: "checkmark-circle", tint: "#10b981", value: `${monthlyCompletion}%`, label: "Success rate" },
+                { icon: "ribbon", tint: "#3b82f6", value: String(totalCompletions), label: "Completions" },
+                { icon: "star", tint: "#f59e0b", value: String(perfectDays), label: "Perfect days" },
+              ],
+              [
+                { icon: "calendar-outline", tint: "#a855f7", value: String(bestDayOfWeek), label: "Best day" },
+                { icon: "trending-up", tint: "#f43f5e", value: String(totalHabitsCount), label: "Active habits" },
+                { icon: "checkmark-done", tint: "#06b6d4", value: String(entries?.filter((e: any) => e.completed).length || 0), label: "This month" },
+              ],
+            ].map((row, r) => (
+              <View key={r} style={{ flexDirection: "row", gap: 10, marginTop: r === 0 ? 16 : 10 }}>
+                {row.map((stat) => (
+                  <View
+                    key={stat.label}
+                    accessibilityLabel={`${stat.label}: ${stat.value}`}
+                    style={{ flex: 1, minWidth: 0, backgroundColor: colors.card, borderColor: colors.cardBorder, borderWidth: 1, borderRadius: 20, paddingVertical: 14, paddingHorizontal: 8, alignItems: "center" }}
+                  >
+                    <View style={{ width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: stat.tint + "1a", marginBottom: 8 }}>
+                      <Ionicons name={stat.icon as any} size={18} color={stat.tint} />
+                    </View>
+                    <Text style={{ color: colors.text, fontSize: 22, fontWeight: "800" }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+                      {stat.value}
+                    </Text>
+                    <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2, textAlign: "center" }} numberOfLines={1}>
+                      {stat.label}
+                    </Text>
+                  </View>
+                ))}
               </View>
-              <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="flex-1 rounded-xl border p-4 items-center min-h-[110px] justify-center">
-                <View className="w-8 h-8 rounded-full bg-blue-500/10 items-center justify-center mb-2">
-                  <Ionicons name="ribbon" size={18} color="#3b82f6" />
-                </View>
-                <Text style={{ color: colors.text }} className="text-2xl font-bold text-center">{totalCompletions}</Text>
-                <Text style={{ color: colors.textMuted }} className="text-xs mt-1 text-center">Total Completions</Text>
-              </View>
-              <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="flex-1 rounded-xl border p-4 items-center min-h-[110px] justify-center">
-                <View className="w-8 h-8 rounded-full bg-amber-500/10 items-center justify-center mb-2">
-                  <Ionicons name="star" size={18} color="#f59e0b" />
-                </View>
-                <Text style={{ color: colors.text }} className="text-2xl font-bold text-center">{perfectDays}</Text>
-                <Text style={{ color: colors.textMuted }} className="text-xs mt-1 text-center">Perfect Days</Text>
-              </View>
-            </View>
-
-            {/* Second row of Stats */}
-            <View className="flex-row justify-between gap-3 mt-3">
-              <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="flex-1 rounded-xl border p-4 items-center min-h-[110px] justify-center">
-                <View className="w-8 h-8 rounded-full bg-purple-500/10 items-center justify-center mb-2">
-                  <Ionicons name="calendar-outline" size={18} color="#a855f7" />
-                </View>
-                <Text style={{ color: colors.text }} className="text-2xl font-bold text-center">{bestDayOfWeek}</Text>
-                <Text style={{ color: colors.textMuted }} className="text-xs mt-1 text-center">Best Day</Text>
-              </View>
-              <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="flex-1 rounded-xl border p-4 items-center min-h-[110px] justify-center">
-                <View className="w-8 h-8 rounded-full bg-rose-500/10 items-center justify-center mb-2">
-                  <Ionicons name="trending-up" size={18} color="#f43f5e" />
-                </View>
-                <Text style={{ color: colors.text }} className="text-2xl font-bold text-center">{totalHabitsCount}</Text>
-                <Text style={{ color: colors.textMuted }} className="text-xs mt-1 text-center">Active Habits</Text>
-              </View>
-              <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="flex-1 rounded-xl border p-4 items-center min-h-[110px] justify-center">
-                <View className="w-8 h-8 rounded-full bg-cyan-500/10 items-center justify-center mb-2">
-                  <Ionicons name="checkmark-done" size={18} color="#06b6d4" />
-                </View>
-                <Text style={{ color: colors.text }} className="text-2xl font-bold text-center">{entries?.filter((e: any) => e.completed).length || 0}</Text>
-                <Text style={{ color: colors.textMuted }} className="text-xs mt-1 text-center">This Month</Text>
-              </View>
-            </View>
+            ))}
 
             {/* Daily Trend Bar Chart */}
             <View style={{ backgroundColor: colors.surface, borderColor: colors.border }} className="mt-4 rounded-2xl border p-4">
@@ -430,7 +415,7 @@ export default function InsightsScreen() {
                     return (
                       <G key={i}>
                         <Line x1={paddingLeft} y1={y} x2={chartWidth - paddingRight} y2={y} stroke={colors.border + '50'} strokeWidth={1} strokeDasharray="4,4" />
-                        <SvgText x={paddingLeft - 15} y={y + 4} fontSize={10} fill={colors.textMuted} fontWeight="600" textAnchor="end">{val}%</SvgText>
+                        <SvgText x={paddingLeft - 15} y={y + 4} fontSize={10} fill={colors.textMuted} fontWeight="600" textAnchor="end">{`${val}%`}</SvgText>
                       </G>
                     );
                   })}

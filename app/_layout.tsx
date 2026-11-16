@@ -63,6 +63,20 @@ function RootLayoutNav() {
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false, animation: 'fade' }} />
+        {/* Full pages opened from Home: slim header with just a back button (each page has its own big title) */}
+        {['badges', 'achievements'].map((name) => (
+          <Stack.Screen
+            key={name}
+            name={name}
+            options={{
+              title: '',
+              headerBackTitle: 'Back',
+              headerShadowVisible: false,
+              headerStyle: { backgroundColor: colors.background },
+              headerTintColor: colors.primary,
+            }}
+          />
+        ))}
         <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
       </Stack>
       <StatusBar style={isDark ? 'light' : 'dark'} />

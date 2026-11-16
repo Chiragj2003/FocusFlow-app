@@ -5,6 +5,7 @@ import { ProgressRing } from '@/components/ui/ProgressRing';
 import type { Badge } from '@/lib/api';
 import { StreakFlame } from '@/components/ui/StreakFlame';
 import { Tap } from '@/components/ui/Tap';
+import { BADGES as AVAILABLE_BADGES, findEarned } from '@/lib/badgeCatalog';
 import { celebrate, toast } from '@/lib/celebrate';
 import { getToday, useAwardBadge, useBadges, useEntries, useHabits, useInsights, useStreaks, useToggleEntry } from '@/lib/hooks';
 import { messages } from '@/lib/messages';
@@ -21,23 +22,6 @@ import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, Text, 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type IconName = keyof typeof Ionicons.glyphMap;
-
-// Milestones to unlock (ids are what the server stores)
-const AVAILABLE_BADGES = [
-  { id: 'first_habit', name: 'First Habit', description: 'You created your first habit', streak: 0, check: (s: any, i: any, h: any) => (h?.length || 0) >= 1 },
-  { id: 'first_completion', name: 'First Step', description: 'You completed your first habit', streak: 0, check: (s: any, i: any) => (i?.totalCompleted || 0) >= 1 },
-  { id: '3_day_streak', name: '3 Day Streak', description: 'Three days in a row', streak: 3, check: (s: any) => (s?.longestStreak || 0) >= 3 },
-  { id: 'week_warrior', name: 'Week Warrior', description: 'A full 7-day streak', streak: 7, check: (s: any) => (s?.longestStreak || 0) >= 7 },
-  { id: '10_day_streak', name: 'Double Digits', description: 'A 10-day streak', streak: 10, check: (s: any) => (s?.longestStreak || 0) >= 10 },
-  { id: 'two_week_titan', name: 'Two Week Titan', description: 'A 14-day streak', streak: 14, check: (s: any) => (s?.longestStreak || 0) >= 14 },
-  { id: '21_day_streak', name: 'Habit Former', description: 'A 21-day streak', streak: 21, check: (s: any) => (s?.longestStreak || 0) >= 21 },
-  { id: 'monthly_master', name: 'Monthly Master', description: 'A 30-day streak', streak: 30, check: (s: any) => (s?.longestStreak || 0) >= 30 },
-  { id: '10_completions', name: '10 Completions', description: '10 habits completed', streak: 0, check: (s: any, i: any) => (i?.totalCompleted || 0) >= 10 },
-  { id: '25_completions', name: '25 Completions', description: '25 habits completed', streak: 0, check: (s: any, i: any) => (i?.totalCompleted || 0) >= 25 },
-  { id: '50_completions', name: 'Half Century', description: '50 habits completed', streak: 0, check: (s: any, i: any) => (i?.totalCompleted || 0) >= 50 },
-  { id: 'century_club', name: 'Century Club', description: '100 habits completed', streak: 0, check: (s: any, i: any) => (i?.totalCompleted || 0) >= 100 },
-  { id: 'all_habits_completed', name: 'Flawless Day', description: 'Every habit done in one day', streak: 0, check: (s: any, i: any, h: any, done: number, total: number) => total > 0 && done === total },
-];
 
 const CATEGORY_ICONS: Record<string, IconName> = {
   health: 'heart',
@@ -106,11 +90,9 @@ export default function DashboardScreen() {
   // Evaluate badge unlocks and celebrate new ones
   React.useEffect(() => {
     if (!badges || !streaks || !insights || !habits || habits.length === 0) return;
-    const collected = new Set(badges.map((b: Badge) => b.name));
-
     AVAILABLE_BADGES.forEach((badge) => {
-      const earned = collected.has(badge.id) || collected.has(badge.name);
-      if (earned || processingBadges.current.has(badge.id)) return;
+      // Same matching as the Badges screen (ids, names and legacy names)
+      if (findEarned(badges, badge) || processingBadges.current.has(badge.id)) return;
       if (!badge.check(streaks, insights, habits, todayCompleted, todayTotal)) return;
 
       processingBadges.current.add(badge.id);
@@ -368,24 +350,42 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        {/* Badges */}
-        <Pressable
-          onPress={() => router.push('/badges')}
-          accessibilityRole="button"
-          accessibilityLabel="See all badges"
-          style={{ ...card, borderRadius: 24, padding: 16, flexDirection: 'row', alignItems: 'center' }}
-        >
-          <View style={{ width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft, marginRight: 12 }}>
-            <Ionicons name="trophy" size={22} color={colors.accent} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: colors.text, fontSize: 16, fontWeight: '700' }}>Badges</Text>
-            <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 2 }}>
-              {AVAILABLE_BADGES.filter((b) => badges?.some((c: Badge) => c.name === b.id || c.name === b.name)).length} of {AVAILABLE_BADGES.length} unlocked
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-        </Pressable>
+        {/* Badges + Challenges */}
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          {[
+            {
+              key: 'badges',
+              href: '/badges' as const,
+              icon: 'trophy' as IconName,
+              title: 'Badges',
+              subtitle: `${AVAILABLE_BADGES.filter((b) => findEarned(badges, b)).length} of ${AVAILABLE_BADGES.length} earned`,
+            },
+            {
+              key: 'challenges',
+              href: '/achievements' as const,
+              icon: 'flag' as IconName,
+              title: 'Challenges',
+              subtitle: 'Join one, earn XP',
+            },
+          ].map((item) => (
+            <Tap
+              key={item.key}
+              onPress={() => router.push(item.href)}
+              accessibilityRole="button"
+              accessibilityLabel={`${item.title}: ${item.subtitle}`}
+              style={{ ...card, flex: 1, borderRadius: 24, padding: 16 }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={{ width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft }}>
+                  <Ionicons name={item.icon} size={22} color={colors.primary} />
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              </View>
+              <Text style={{ color: colors.text, fontSize: 16, fontWeight: '800', marginTop: 12 }}>{item.title}</Text>
+              <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }} numberOfLines={1}>{item.subtitle}</Text>
+            </Tap>
+          ))}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );

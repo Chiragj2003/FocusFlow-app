@@ -184,7 +184,7 @@ export const HABIT_TEMPLATES: HabitTemplate[] = [
     title: 'Plan My Day',
     description: 'Plan and prioritize tasks for the day',
     category: 'Productivity',
-    color: '#ffffff',
+    color: '#f59e0b',
     goalType: 'binary',
     icon: '📋',
   },

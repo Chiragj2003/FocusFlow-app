@@ -23,7 +23,7 @@ export function BrandMark({ size = 84 }: { size?: number }) {
         elevation: 10,
       }}
     >
-      <FlameMark size={size * 0.62} />
+      <FlameMark size={size * 0.7} onDark />
     </View>
   );
 }
